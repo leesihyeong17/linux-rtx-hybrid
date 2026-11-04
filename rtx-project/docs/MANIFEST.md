@@ -19,7 +19,7 @@
 ## 실행 환경 (실험 때 D가 채움)
 - 호스트 / VirtualBox 버전:
 - VM: vCPU, RAM, Ubuntu 20.04.6
-- PMU(cycles) 지원 여부:
+- PMU(cycles) 지원 여부:미지원 (VirtualBox, 2026-11-04 확인)
 - 네트워크 조건 (netem, RTT, 손실, qdisc):
 - 혼잡 제어 / offload:
 - 측정 도구 버전:
