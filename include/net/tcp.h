@@ -1755,14 +1755,16 @@ static inline void tcp_skb_tsorted_anchor_cleanup(struct sk_buff *skb)
 
 void tcp_write_queue_purge(struct sock *sk);
 
+#include <net/tcp_rtx.h>
+
 static inline struct sk_buff *tcp_rtx_queue_head(const struct sock *sk)
 {
-	return skb_rb_first(&sk->tcp_rtx_queue);
+	return rtx_first(sk);
 }
 
 static inline struct sk_buff *tcp_rtx_queue_tail(const struct sock *sk)
 {
-	return skb_rb_last(&sk->tcp_rtx_queue);
+	return rtx_last(sk);
 }
 
 static inline struct sk_buff *tcp_write_queue_head(const struct sock *sk)
@@ -1796,7 +1798,7 @@ static inline bool tcp_write_queue_empty(const struct sock *sk)
 
 static inline bool tcp_rtx_queue_empty(const struct sock *sk)
 {
-	return RB_EMPTY_ROOT(&sk->tcp_rtx_queue);
+	return rtx_empty(sk);
 }
 
 static inline bool tcp_rtx_and_write_queues_empty(const struct sock *sk)
@@ -1832,7 +1834,7 @@ void tcp_rbtree_insert(struct rb_root *root, struct sk_buff *skb);
 static inline void tcp_rtx_queue_unlink(struct sk_buff *skb, struct sock *sk)
 {
 	tcp_skb_tsorted_anchor_cleanup(skb);
-	rb_erase(&skb->rbnode, &sk->tcp_rtx_queue);
+	rtx_unlink(sk, skb);
 }
 
 static inline void tcp_rtx_queue_unlink_and_free(struct sk_buff *skb, struct sock *sk)
