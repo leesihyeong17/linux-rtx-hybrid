@@ -64,6 +64,21 @@ static inline struct sk_buff *rtx_prev(const struct sock *sk,
 	return skb_rb_prev(skb);
 }
 
+/* In-order iteration. Replacements for skb_rbtree_walk*() on the rtx queue.
+ * Only the _safe variant allows unlinking the current skb inside the loop.
+ * It does NOT protect against removing the next skb as well (SACK shift
+ * can do that): such callers must keep using the cursor they get back.
+ */
+#define rtx_walk(skb, sk)						\
+	for (skb = rtx_first(sk); skb; skb = rtx_next(sk, skb))
+
+#define rtx_walk_from(skb, sk)						\
+	for (; skb; skb = rtx_next(sk, skb))
+
+#define rtx_walk_from_safe(skb, tmp, sk)				\
+	for (; tmp = skb ? rtx_next(sk, skb) : NULL, (skb != NULL);	\
+	     skb = tmp)
+
 /* Return the skb with seq <= @seq < end_seq, or NULL if none covers it.
  * Same semantics as the original tcp_sacktag_bsearch().
  */
