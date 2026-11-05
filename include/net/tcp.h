@@ -1870,7 +1870,7 @@ static inline u32 tcp_highest_sack_seq(struct tcp_sock *tp)
 
 static inline void tcp_advance_highest_sack(struct sock *sk, struct sk_buff *skb)
 {
-	tcp_sk(sk)->highest_sack = skb_rb_next(skb);
+	tcp_sk(sk)->highest_sack = rtx_next(sk, skb);
 }
 
 static inline struct sk_buff *tcp_highest_sack(struct sock *sk)

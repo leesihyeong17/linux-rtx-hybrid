@@ -1418,7 +1418,7 @@ static struct sk_buff *tcp_shift_skb_data(struct sock *sk, struct sk_buff *skb,
 		goto fallback;
 
 	/* Can only happen with delayed DSACK + discard craziness */
-	prev = skb_rb_prev(skb);
+	prev = rtx_prev(sk, skb);
 	if (!prev)
 		goto fallback;
 
@@ -1505,7 +1505,7 @@ static struct sk_buff *tcp_shift_skb_data(struct sock *sk, struct sk_buff *skb,
 	/* Hole filled allows collapsing with the next as well, this is very
 	 * useful when hole on every nth skb pattern happens
 	 */
-	skb = skb_rb_next(prev);
+	skb = rtx_next(sk, prev);
 	if (!skb)
 		goto out;
 
@@ -1540,7 +1540,7 @@ static struct sk_buff *tcp_sacktag_walk(struct sk_buff *skb, struct sock *sk,
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *tmp;
 
-	skb_rbtree_walk_from(skb) {
+	rtx_walk_from(skb, sk) {
 		int in_sack = 0;
 		bool dup_sack = dup_sack_in;
 
@@ -1603,34 +1603,13 @@ static struct sk_buff *tcp_sacktag_walk(struct sk_buff *skb, struct sock *sk,
 	return skb;
 }
 
-static struct sk_buff *tcp_sacktag_bsearch(struct sock *sk, u32 seq)
-{
-	struct rb_node *parent, **p = &sk->tcp_rtx_queue.rb_node;
-	struct sk_buff *skb;
-
-	while (*p) {
-		parent = *p;
-		skb = rb_to_skb(parent);
-		if (before(seq, TCP_SKB_CB(skb)->seq)) {
-			p = &parent->rb_left;
-			continue;
-		}
-		if (!before(seq, TCP_SKB_CB(skb)->end_seq)) {
-			p = &parent->rb_right;
-			continue;
-		}
-		return skb;
-	}
-	return NULL;
-}
-
 static struct sk_buff *tcp_sacktag_skip(struct sk_buff *skb, struct sock *sk,
 					u32 skip_to_seq)
 {
 	if (skb && after(TCP_SKB_CB(skb)->seq, skip_to_seq))
 		return skb;
 
-	return tcp_sacktag_bsearch(sk, skip_to_seq);
+	return rtx_find_cover(sk, skip_to_seq);
 }
 
 static struct sk_buff *tcp_maybe_skipping_dsack(struct sk_buff *skb,
@@ -1976,7 +1955,7 @@ static void tcp_timeout_mark_lost(struct sock *sk)
 	}
 
 	skb = head;
-	skb_rbtree_walk_from(skb) {
+	rtx_walk_from(skb, sk) {
 		if (is_reneg)
 			TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_ACKED;
 		else if (tcp_is_rack(sk) && skb != head &&
@@ -2214,7 +2193,7 @@ static void tcp_mark_head_lost(struct sock *sk, int packets, int mark_head)
 		cnt = 0;
 	}
 
-	skb_rbtree_walk_from(skb) {
+	rtx_walk_from(skb, sk) {
 		/* TODO: do this better */
 		/* this is not the most efficient way to do this... */
 		tp->lost_skb_hint = skb;
@@ -2357,7 +2336,7 @@ static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 	if (unmark_loss) {
 		struct sk_buff *skb;
 
-		skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
+		rtx_walk(skb, sk) {
 			TCP_SKB_CB(skb)->sacked &= ~TCPCB_LOST;
 		}
 		tp->lost_out = 0;
@@ -2623,7 +2602,7 @@ void tcp_simple_retransmit(struct sock *sk)
 	struct sk_buff *skb;
 	unsigned int mss = tcp_current_mss(sk);
 
-	skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
+	rtx_walk(skb, sk) {
 		if (tcp_skb_seglen(skb) > mss &&
 		    !(TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)) {
 			if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS) {
@@ -3111,7 +3090,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 
 	first_ackt = 0;
 
-	for (skb = skb_rb_first(&sk->tcp_rtx_queue); skb; skb = next) {
+	for (skb = rtx_first(sk); skb; skb = next) {
 		struct tcp_skb_cb *scb = TCP_SKB_CB(skb);
 		const u32 start_seq = scb->seq;
 		u8 sacked = scb->sacked;
@@ -3182,7 +3161,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 		if (!fully_acked)
 			break;
 
-		next = skb_rb_next(skb);
+		next = rtx_next(sk, skb);
 		if (unlikely(skb == tp->retransmit_skb_hint))
 			tp->retransmit_skb_hint = NULL;
 		if (unlikely(skb == tp->lost_skb_hint))
@@ -5881,7 +5860,7 @@ static bool tcp_rcv_fastopen_synack(struct sock *sk, struct sk_buff *synack,
 	tcp_fastopen_cache_set(sk, mss, cookie, syn_drop, try_exp);
 
 	if (data) { /* Retransmit unacked data in SYN */
-		skb_rbtree_walk_from(data) {
+		rtx_walk_from(data, sk) {
 			if (__tcp_retransmit_skb(sk, data, 1))
 				break;
 		}
