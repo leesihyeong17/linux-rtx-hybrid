@@ -70,7 +70,7 @@ static void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 	WRITE_ONCE(tp->snd_nxt, TCP_SKB_CB(skb)->end_seq);
 
 	__skb_unlink(skb, &sk->sk_write_queue);
-	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);
+	rtx_append(sk, skb);
 
 	if (tp->highest_sack == NULL)
 		tp->highest_sack = skb;
@@ -1295,7 +1295,7 @@ static void tcp_insert_write_queue_after(struct sk_buff *skb,
 	if (tcp_queue == TCP_FRAG_IN_WRITE_QUEUE)
 		__skb_queue_after(&sk->sk_write_queue, skb, buff);
 	else
-		tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
+		rtx_insert_ordered(sk, buff);
 }
 
 /* Function to create two new TCP segments.  Shrinks the given segment
@@ -2583,7 +2583,7 @@ void tcp_send_loss_probe(struct sock *sk)
 			goto probe_sent;
 		goto rearm_timer;
 	}
-	skb = skb_rb_last(&sk->tcp_rtx_queue);
+	skb = rtx_last(sk);
 	if (unlikely(!skb)) {
 		WARN_ONCE(tp->packets_out,
 			  "invalid inflight: %u state %u cwnd %u mss %d\n",
@@ -2604,7 +2604,7 @@ void tcp_send_loss_probe(struct sock *sk)
 					  (pcount - 1) * mss, mss,
 					  GFP_ATOMIC)))
 			goto rearm_timer;
-		skb = skb_rb_next(skb);
+		skb = rtx_next(sk, skb);
 	}
 
 	if (WARN_ON(!skb || !tcp_skb_pcount(skb)))
@@ -2806,7 +2806,7 @@ void tcp_skb_collapse_tstamp(struct sk_buff *skb,
 static bool tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	struct sk_buff *next_skb = skb_rb_next(skb);
+	struct sk_buff *next_skb = rtx_next(sk, skb);
 	int next_skb_size;
 
 	next_skb_size = next_skb->len;
@@ -2876,7 +2876,7 @@ static void tcp_retrans_try_collapse(struct sock *sk, struct sk_buff *to,
 	if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_SYN)
 		return;
 
-	skb_rbtree_walk_from_safe(skb, tmp) {
+	rtx_walk_from_safe(skb, tmp, sk) {
 		if (!tcp_can_collapse(sk, skb))
 			break;
 
@@ -3077,7 +3077,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 	rtx_head = tcp_rtx_queue_head(sk);
 	skb = tp->retransmit_skb_hint ?: rtx_head;
 	max_segs = tcp_tso_segs(sk, tcp_current_mss(sk));
-	skb_rbtree_walk_from(skb) {
+	rtx_walk_from(skb, sk) {
 		__u8 sacked;
 		int segs;
 
@@ -3170,7 +3170,7 @@ void tcp_send_fin(struct sock *sk)
 	 * as TCP stack thinks it has already been transmitted.
 	 */
 	if (!tskb && tcp_under_memory_pressure(sk))
-		tskb = skb_rb_last(&sk->tcp_rtx_queue);
+		tskb = rtx_last(sk);
 
 	if (tskb) {
 		TCP_SKB_CB(tskb)->tcp_flags |= TCPHDR_FIN;
@@ -3263,7 +3263,7 @@ int tcp_send_synack(struct sock *sk)
 			tcp_highest_sack_replace(sk, skb, nskb);
 			tcp_rtx_queue_unlink_and_free(skb, sk);
 			__skb_header_release(nskb);
-			tcp_rbtree_insert(&sk->tcp_rtx_queue, nskb);
+			rtx_insert_ordered(sk, nskb);
 			sk_wmem_queued_add(sk, nskb->truesize);
 			sk_mem_charge(sk, nskb->truesize);
 			skb = nskb;
@@ -3571,7 +3571,7 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 	TCP_SKB_CB(syn_data)->tcp_flags = TCPHDR_ACK | TCPHDR_PSH;
 	if (!err) {
 		tp->syn_data = (fo->copied > 0);
-		tcp_rbtree_insert(&sk->tcp_rtx_queue, syn_data);
+		rtx_insert_ordered(sk, syn_data);
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPORIGDATASENT);
 		goto done;
 	}
@@ -3620,7 +3620,7 @@ int tcp_connect(struct sock *sk)
 	tp->retrans_stamp = tcp_time_stamp(tp);
 	tcp_connect_queue_skb(sk, buff);
 	tcp_ecn_send_syn(sk, buff);
-	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
+	rtx_insert_ordered(sk, buff);
 
 	/* Send off SYN; include data in Fast Open. */
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :

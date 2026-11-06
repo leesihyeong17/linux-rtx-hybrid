@@ -1506,7 +1506,7 @@ static int tcp_peek_sndq(struct sock *sk, struct msghdr *msg, int len)
 
 	/* XXX -- need to support SO_PEEK_OFF */
 
-	skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
+	rtx_walk(skb, sk) {
 		err = skb_copy_datagram_msg(skb, 0, msg, skb->len);
 		if (err)
 			return err;
