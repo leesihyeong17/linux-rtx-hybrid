@@ -1,0 +1,4 @@
+# Local worktrees, kernel builds and raw environment/benchmark captures.
+/.work/
+/results/
+__pycache__/
