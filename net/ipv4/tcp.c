@@ -411,7 +411,7 @@ void tcp_init_sock(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	tp->out_of_order_queue = RB_ROOT;
-	sk->tcp_rtx_queue = RB_ROOT;
+	rtx_init(sk);
 	tcp_init_xmit_timers(sk);
 	INIT_LIST_HEAD(&tp->tsq_node);
 	INIT_LIST_HEAD(&tp->tsorted_sent_queue);
@@ -2535,13 +2535,10 @@ static inline bool tcp_need_reset(int state)
 
 static void tcp_rtx_queue_purge(struct sock *sk)
 {
-	struct rb_node *p = rb_first(&sk->tcp_rtx_queue);
+	struct sk_buff *skb = rtx_first(sk), *tmp;
 
 	tcp_sk(sk)->highest_sack = NULL;
-	while (p) {
-		struct sk_buff *skb = rb_to_skb(p);
-
-		p = rb_next(p);
+	rtx_walk_from_safe(skb, tmp, sk) {
 		/* Since we are deleting whole queue, no need to
 		 * list_del(&skb->tcp_tsorted_anchor)
 		 */
