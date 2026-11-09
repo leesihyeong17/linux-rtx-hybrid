@@ -718,6 +718,17 @@ config DEFAULT_TCP_CONG
 	default "bbr" if DEFAULT_BBR
 	default "cubic"
 
+config TCP_RTX_DEBUG
+	bool "TCP: retransmit queue adapter debug checks"
+	default n
+	---help---
+	  Enables extra consistency checks in the TCP retransmit queue
+	  adapter (include/net/tcp_rtx.h): public rtx_* calls inside a
+	  split transaction and broken split preconditions trigger
+	  WARN_ON_ONCE(). Adds one byte to struct tcp_sock.
+
+	  For development only. If unsure, say N.
+
 config TCP_MD5SIG
 	bool "TCP: MD5 Signature Option support (RFC2385)"
 	select CRYPTO
