@@ -729,6 +729,17 @@ config TCP_RTX_DEBUG
 
 	  For development only. If unsure, say N.
 
+config TCP_RTX_STATS
+	bool "TCP: retransmit queue measurement counters"
+	default n
+	---help---
+	  Counts retransmit queue events (inserts, removals, lookups, SACK
+	  and ACK work) per CPU and keeps a histogram of the queue length
+	  in skbs. Results are in /proc/rtx_stats. Adds 4 bytes to
+	  struct tcp_sock and a few instructions per queue operation.
+
+	  For measurement builds only. If unsure, say N.
+
 config TCP_MD5SIG
 	bool "TCP: MD5 Signature Option support (RFC2385)"
 	select CRYPTO

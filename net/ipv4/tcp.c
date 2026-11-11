@@ -2543,6 +2543,7 @@ static void tcp_rtx_queue_purge(struct sock *sk)
 		 * list_del(&skb->tcp_tsorted_anchor)
 		 */
 		tcp_rtx_queue_unlink(skb, sk);
+		rtx_stat_inc(RTX_STAT_UNLINK_PURGE);
 		sk_wmem_free_skb(sk, skb);
 	}
 }

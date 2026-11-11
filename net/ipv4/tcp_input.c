@@ -3610,7 +3610,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	sack_state.rate = &rs;
 
 	/* We very likely will need to access rtx queue. */
-	prefetch(sk->tcp_rtx_queue.rb_node);
+	rtx_prefetch(sk);
 
 	/* If the ack is older than previous acks
 	 * then we can probably ignore it.

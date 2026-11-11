@@ -7,6 +7,8 @@
  *
  * It uses a zeroed tcp_sock and bare skbs, not a real connection, and only
  * checks the queue structure (order, links, lookups, split transaction).
+ * With CONFIG_TCP_RTX_STATS it also checks the per-socket skb count. Its
+ * own inserts show up in /proc/rtx_stats, so reset that before measuring.
  */
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -58,6 +60,10 @@ static void st_free(struct sock *sk)
 		kfree_skb(skb);
 	}
 	CHECK(rtx_empty(sk), "queue not empty after unlinking everything");
+#ifdef CONFIG_TCP_RTX_STATS
+	CHECK(tcp_sk(sk)->rtx_count == 0, "rtx_count %u after unlinking everything",
+	      tcp_sk(sk)->rtx_count);
+#endif
 	kfree(sk);
 }
 
@@ -99,6 +105,10 @@ static int st_check_order(struct sock *sk, u32 base, u32 end)
 	}
 	CHECK(expect == end, "queue ends at %u, expected %u", expect, end);
 	CHECK(rtx_last(sk) == prev, "rtx_last is not the last walked skb");
+#ifdef CONFIG_TCP_RTX_STATS
+	CHECK(tcp_sk(sk)->rtx_count == n, "rtx_count %u, walked %d",
+	      tcp_sk(sk)->rtx_count, n);
+#endif
 	return n;
 }
 

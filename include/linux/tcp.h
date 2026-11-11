@@ -397,6 +397,9 @@ struct tcp_sock {
 	 */
 	struct request_sock __rcu *fastopen_rsk;
 	u32	*saved_syn;
+#ifdef CONFIG_TCP_RTX_STATS
+	u32	rtx_count;	/* skbs in the rtx queue (measurement only) */
+#endif
 #ifdef CONFIG_TCP_RTX_DEBUG
 	u8	rtx_txn_open;	/* rtx split transaction in progress */
 #endif
