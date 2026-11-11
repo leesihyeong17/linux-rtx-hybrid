@@ -1286,16 +1286,12 @@ static void tcp_skb_fragment_eor(struct sk_buff *skb, struct sk_buff *skb2)
 	TCP_SKB_CB(skb)->eor = 0;
 }
 
-/* Insert buff after skb on the write or rtx queue of sk.  */
+/* Insert buff after skb on the write queue of sk.  */
 static void tcp_insert_write_queue_after(struct sk_buff *skb,
 					 struct sk_buff *buff,
-					 struct sock *sk,
-					 enum tcp_queue tcp_queue)
+					 struct sock *sk)
 {
-	if (tcp_queue == TCP_FRAG_IN_WRITE_QUEUE)
-		__skb_queue_after(&sk->sk_write_queue, skb, buff);
-	else
-		rtx_insert_ordered(sk, buff);
+	__skb_queue_after(&sk->sk_write_queue, skb, buff);
 }
 
 /* Function to create two new TCP segments.  Shrinks the given segment
@@ -1307,6 +1303,7 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 		 struct sk_buff *skb, u32 len,
 		 unsigned int mss_now, gfp_t gfp)
 {
+	struct rtx_split_token tok;
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *buff;
 	int nsize, old_factor;
@@ -1350,6 +1347,9 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 	buff->truesize += nlen;
 	skb->truesize -= nlen;
 
+	if (tcp_queue == TCP_FRAG_IN_RTX_QUEUE)
+		rtx_split_prepare(sk, skb, &tok);
+
 	/* Correct the sequence numbers. */
 	TCP_SKB_CB(buff)->seq = TCP_SKB_CB(skb)->seq + len;
 	TCP_SKB_CB(buff)->end_seq = TCP_SKB_CB(skb)->end_seq;
@@ -1391,9 +1391,12 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 
 	/* Link BUFF into the send queue. */
 	__skb_header_release(buff);
-	tcp_insert_write_queue_after(skb, buff, sk, tcp_queue);
-	if (tcp_queue == TCP_FRAG_IN_RTX_QUEUE)
+	if (tcp_queue == TCP_FRAG_IN_RTX_QUEUE) {
+		rtx_split_commit(sk, &tok, buff);
 		list_add(&buff->tcp_tsorted_anchor, &skb->tcp_tsorted_anchor);
+	} else {
+		tcp_insert_write_queue_after(skb, buff, sk);
+	}
 
 	return 0;
 }
@@ -1932,7 +1935,7 @@ static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 
 	/* Link BUFF into the send queue. */
 	__skb_header_release(buff);
-	tcp_insert_write_queue_after(skb, buff, sk, TCP_FRAG_IN_WRITE_QUEUE);
+	tcp_insert_write_queue_after(skb, buff, sk);
 
 	return 0;
 }
