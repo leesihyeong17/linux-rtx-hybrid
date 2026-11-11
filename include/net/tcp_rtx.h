@@ -16,6 +16,7 @@
  *  - rtx_next()/rtx_prev() require an skb that is currently in the queue.
  *  - Insert helpers require an skb that is not linked anywhere.
  *  - Split: see the rtx_split_* section below.
+ *  - Measurement counters: see the CONFIG_TCP_RTX_STATS section below.
  *
  * Backend: RB (V1). Thin wrappers around the existing rbtree code, so the
  * generated code should be identical to the unmodified kernel.
@@ -31,6 +32,9 @@
 #ifndef _TCP_H
 #error "include <net/tcp.h> instead of <net/tcp_rtx.h>"
 #endif
+
+#include <linux/log2.h>
+#include <linux/percpu.h>
 
 void tcp_rbtree_insert(struct rb_root *root, struct sk_buff *skb);
 
@@ -56,16 +60,105 @@ static inline void rtx_assert_no_txn(const struct sock *sk)
 }
 #endif
 
+/*
+ * ---- measurement counters (CONFIG_TCP_RTX_STATS) ----
+ *
+ * Per-CPU event counters plus a histogram of the queue length N, sampled
+ * every time an skb is linked into the queue. N counts skbs (a GSO skb is
+ * one entry), not TCP segments. Read with `cat /proc/rtx_stats`, reset by
+ * writing anything to it as root (do it while no traffic is running).
+ *
+ * The enum is always defined so call sites compile in every configuration.
+ * With the option off, all helpers are empty and the generated code does
+ * not change. Keep it off for final performance runs (design doc 10.3).
+ */
+enum rtx_stat {
+	/* counted inside the adapter (A) */
+	RTX_STAT_INSERT_APPEND,
+	RTX_STAT_INSERT_ORDERED,
+	RTX_STAT_INSERT_SPLIT,
+	RTX_STAT_UNLINK_TREE,
+	RTX_STAT_UNLINK_LIST,
+	RTX_STAT_UNLINK_PURGE,		/* subset of UNLINK_*: whole-queue purge */
+	RTX_STAT_PROMOTE,
+	RTX_STAT_FIND_COVER,		/* rtx_find_cover() calls */
+	RTX_STAT_FIND_COVER_TREE_STEPS,	/* tree nodes compared */
+	RTX_STAT_FIND_COVER_LIST_STEPS,	/* list nodes compared (hybrid) */
+	/* counted at call sites (C) */
+	RTX_STAT_SACK_SKIP_REUSE,	/* tcp_sacktag_skip() kept the cursor */
+	RTX_STAT_SACK_BLOCK,		/* SACK blocks processed */
+	RTX_STAT_SACK_WALK_SKB,		/* skbs visited by tcp_sacktag_walk() */
+	RTX_STAT_SHIFT_PARTIAL,
+	RTX_STAT_SHIFT_MERGE,
+	RTX_STAT_SHIFT_FALLBACK,
+	RTX_STAT_ACK_CLEAN,		/* tcp_clean_rtx_queue() calls */
+	RTX_STAT_ACK_UNLINK,		/* skbs removed by tcp_clean_rtx_queue() */
+	RTX_STAT_ACK_TRIM,		/* partial ACK head trims */
+	__RTX_STAT_MAX
+};
+
+/* N histogram bucket b holds N in [2^b, 2^(b+1)-1]; the last is open. */
+#define RTX_N_HIST_BUCKETS	16
+
+#ifdef CONFIG_TCP_RTX_STATS
+struct rtx_stats {
+	u64 cnt[__RTX_STAT_MAX];
+	u64 n_hist[RTX_N_HIST_BUCKETS];
+};
+DECLARE_PER_CPU(struct rtx_stats, rtx_stats);
+
+static inline void rtx_stat_add(enum rtx_stat id, u64 val)
+{
+	this_cpu_add(rtx_stats.cnt[id], val);
+}
+
+static inline void __rtx_count_link(struct sock *sk)
+{
+	u32 n = ++tcp_sk(sk)->rtx_count;
+	unsigned int b = ilog2(n);
+
+	if (b >= RTX_N_HIST_BUCKETS)
+		b = RTX_N_HIST_BUCKETS - 1;
+	this_cpu_inc(rtx_stats.n_hist[b]);
+}
+
+static inline void __rtx_count_unlink(struct sock *sk)
+{
+	tcp_sk(sk)->rtx_count--;
+}
+#else
+static inline void rtx_stat_add(enum rtx_stat id, u64 val)
+{
+}
+
+static inline void __rtx_count_link(struct sock *sk)
+{
+}
+
+static inline void __rtx_count_unlink(struct sock *sk)
+{
+}
+#endif
+
+static inline void rtx_stat_inc(enum rtx_stat id)
+{
+	rtx_stat_add(id, 1);
+}
+
 /* ---- backend internals (no transaction check) ---- */
 
-static inline struct sk_buff *__rtx_find_cover(struct sock *sk, u32 seq)
+/* @steps (may be NULL) receives the number of tree nodes compared. */
+static inline struct sk_buff *__rtx_find_cover(struct sock *sk, u32 seq,
+					       unsigned int *steps)
 {
 	struct rb_node *parent, **p = &sk->tcp_rtx_queue.rb_node;
-	struct sk_buff *skb;
+	struct sk_buff *skb, *found = NULL;
+	unsigned int n = 0;
 
 	while (*p) {
 		parent = *p;
 		skb = rb_to_skb(parent);
+		n++;
 		if (before(seq, TCP_SKB_CB(skb)->seq)) {
 			p = &parent->rb_left;
 			continue;
@@ -74,9 +167,12 @@ static inline struct sk_buff *__rtx_find_cover(struct sock *sk, u32 seq)
 			p = &parent->rb_right;
 			continue;
 		}
-		return skb;
+		found = skb;
+		break;
 	}
-	return NULL;
+	if (steps)
+		*steps = n;
+	return found;
 }
 
 /* Ordered insert into the tree part only. Never re-decides the domain. */
@@ -90,6 +186,15 @@ static inline void __rtx_tree_insert(struct sock *sk, struct sk_buff *skb)
 static inline void rtx_init(struct sock *sk)
 {
 	sk->tcp_rtx_queue = RB_ROOT;
+#ifdef CONFIG_TCP_RTX_STATS
+	tcp_sk(sk)->rtx_count = 0;
+#endif
+}
+
+/* Cache hint for the ACK fast path. Not a structural access. */
+static inline void rtx_prefetch(const struct sock *sk)
+{
+	prefetch(sk->tcp_rtx_queue.rb_node);
 }
 
 static inline bool rtx_empty(const struct sock *sk)
@@ -146,8 +251,14 @@ static inline struct sk_buff *rtx_prev(const struct sock *sk,
  */
 static inline struct sk_buff *rtx_find_cover(struct sock *sk, u32 seq)
 {
+	struct sk_buff *skb;
+	unsigned int steps;
+
 	rtx_assert_no_txn(sk);
-	return __rtx_find_cover(sk, seq);
+	skb = __rtx_find_cover(sk, seq, &steps);
+	rtx_stat_inc(RTX_STAT_FIND_COVER);
+	rtx_stat_add(RTX_STAT_FIND_COVER_TREE_STEPS, steps);
+	return skb;
 }
 
 /* Insert an skb at its sequence position. */
@@ -155,6 +266,8 @@ static inline void rtx_insert_ordered(struct sock *sk, struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);
+	rtx_stat_inc(RTX_STAT_INSERT_ORDERED);
+	__rtx_count_link(sk);
 }
 
 /* Insert an skb that is known to come after the current tail.
@@ -164,6 +277,8 @@ static inline void rtx_append(struct sock *sk, struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);
+	rtx_stat_inc(RTX_STAT_INSERT_APPEND);
+	__rtx_count_link(sk);
 }
 
 /* Remove an skb from the queue structure only (see contract above). */
@@ -171,6 +286,8 @@ static inline void rtx_unlink(struct sock *sk, struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
 	rb_erase(&skb->rbnode, &sk->tcp_rtx_queue);
+	rtx_stat_inc(RTX_STAT_UNLINK_TREE);
+	__rtx_count_unlink(sk);
 }
 
 /*
@@ -243,11 +360,13 @@ static inline void rtx_split_commit(struct sock *sk,
 	/* Nothing may cover buff's start yet: otherwise buff (or an
 	 * overlapping skb) is already in the queue.
 	 */
-	WARN_ON_ONCE(__rtx_find_cover(sk, bcb->seq));
+	WARN_ON_ONCE(__rtx_find_cover(sk, bcb->seq, NULL));
 	tcp_sk(sk)->rtx_txn_open = 0;
 #endif
 	/* RB backend: tok->domain is always RTX_DOMAIN_TREE. */
 	__rtx_tree_insert(sk, buff);
+	rtx_stat_inc(RTX_STAT_INSERT_SPLIT);
+	__rtx_count_link(sk);
 	tok->skb = NULL;
 }
 
