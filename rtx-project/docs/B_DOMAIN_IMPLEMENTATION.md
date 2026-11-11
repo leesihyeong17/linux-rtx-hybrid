@@ -179,7 +179,7 @@ void rtx_split_commit(struct sock *sk, struct rtx_split_token *tok,
 
 현재 소스에는 prepare 이후 오류 반환 경로가 없다. 따라서 이 경로를 유지한다면 abort API가 필요하지 않다는 판단이다. 후속 변경이 실패 가능한 연산이나 조기 반환을 추가하면 이 전제를 다시 검토해야 한다.
 
-RTX 분할은 `tcp_fragment()`의 공통 경로를 사용한다. 직접 호출 지점은 `tcp_output.c` 2곳, `tcp_input.c` 2곳, `tcp_recovery.c` 1곳이다. B의 함수 연결이 C의 SACK·RACK 동작에도 영향을 주므로 통합 검증이 필요하다.
+RTX 분할은 `tcp_fragment()`의 공통 경로를 사용한다. 직접 호출 지점은 `tcp_output.c` 2곳, `tcp_input.c` 2곳, `tcp_recovery.c`의 NewReno 1곳이다. RACK는 직접 분할 호출자가 아니라 분할 후 시간 큐를 소비한다. B의 함수 연결이 C의 SACK·RACK 동작에도 영향을 주므로 통합 검증이 필요하다.
 
 ### 5.3 commit 전제와 동작
 
@@ -291,8 +291,8 @@ MANIFEST에는 VirtualBox PMU 미지원이 기록되어 있다. 해당 환경에
 - [x] 실제 `tcp_fragment()`에서 head·중간·tail × 3개 시퀀스 기준의 9개 조합과 단일 skb 재분할을 실행했다. [경계 검증과 트레이드오프](B_SPLIT_BOUNDARY_VALIDATION.md): 172 assertion 통과. 가능한 모든 길이의 전수 검증은 아니다.
 - [x] 실제 커널 skb에서 FIN/PSH 이동, GSO pcount 4→5, 데이터의 32비트 sequence wrap을 확인했다. fixture 실행이며 네트워크상의 wrap 송수신과는 구분한다.
 - [x] 할당·unclone 호출 경계에 실패를 주입해 prepare 이전 종료, 큐·회계 보존과 재시도를 확인했다. [실패 복구 검증과 트레이드오프](B_SPLIT_FAILURE_VALIDATION.md): 38 assertion 통과. allocator 내부 실패 주입은 별도 범위다.
-- [ ] write queue의 실제 분할 경로를 별도로 추적한다. 현재는 코드 검토와 기본 TCP smoke로 확인했다.
-- [ ] C와 RACK 및 Reno 손실 표시의 나머지 호출 경로를 재현한다.
+- [x] write queue의 tcp_fragment와 page fragment를 가진 tso_fragment를 실제 실행했다. 두 경로 모두 RTX transaction 0회다. [호출 경로 검증](B_SPLIT_CALLER_VALIDATION.md): 손실 경로와 합계 49 assertion 통과.
+- [x] tcp_mark_head_lost와 tcp_newreno_mark_lost의 실제 분할을 fixture로 재현했다. tcp_recovery.c의 직접 분할 호출자는 RACK가 아니라 NewReno다. RACK의 시간 큐 소비 검증은 별도 불변식 항목으로 구분한다.
 - [ ] 시간 큐 연결·힌트의 직접 불변식 검사를 마련한다. 현재 TCP_INFO와 WARN 부재만으로 전체 내부 상태를 입증하지 않는다.
 
 캐시·tail 최적화, LIST/승격, merge·trim·replace와 성능 측정은 이번 ②~④의 구현 범위 밖이며 A·C 계약 및 별도 검증이 필요하다.
