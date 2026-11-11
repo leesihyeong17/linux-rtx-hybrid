@@ -113,3 +113,7 @@ Core selftest는 K까지의 append, K+1 승격, 자기 승격, wrap, 구멍 검�
 | K=1 fixture | `f03d4c3238ca1c2a0cb09d47e577ca24fc07943e4932070e1b1bf04820027319` |
 
 두 실행 모두 task 컨테이너 제거와 빈 `remaining-containers.txt`를 확인했다. 기존 컨테이너·이미지·볼륨은 보존했고 스크린샷용 HTTP 서버도 종료했다.
+
+### 시험 도구 구성
+
+`run_hybrid_validation.sh`는 snapshot·Docker 수명·증거 폴더를 관리하고 `hybrid_validation_container.sh`는 빌드 매트릭스와 세 부팅을 실행한다. `case_hybrid.c`는 실제 TCP 소켓의 K-full 분할을 검증하며 기존 fixture의 purge 검사에도 구조 검증을 추가했다. `render_hybrid_report.py <실행 폴더>`는 저장된 결과와 원본 로그를 다시 판정한 뒤 캡처용 HTML을 만든다. 화면 캡처는 이 HTML을 localhost로 제공한 후 수행한다.
