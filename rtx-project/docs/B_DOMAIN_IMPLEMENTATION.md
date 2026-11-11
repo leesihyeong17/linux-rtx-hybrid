@@ -1,8 +1,8 @@
 # B 도메인 V1 구현과 후속 작업
 
-작성일: 2026-11-06
+작성일: 2026-11-06 · 갱신일: 2026-11-11
 
-B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. 현재 완료한 작업은 기존 RB backend를 유지하는 V1 호출부 전환이다. 최근 리스트, 승격, 캐시, tail 직접 연결 최적화와 split token은 아직 구현하지 않았다.
+B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. V1 호출부 전환에 이어 RB backend의 split prepare/commit을 `tcp_fragment()`에 연결했다. 최근 리스트, 승격, 캐시와 tail 직접 연결 최적화는 아직 구현하지 않았다. split 연결의 실제 커널 실행 검증은 미실행이다.
 
 이 문서는 B 담당자와 A·C·D 협업자가 현재 구현 범위, 검증 한계, 다음 패치의 선행 조건을 확인하기 위한 기록이다.
 
@@ -72,7 +72,7 @@ V1 구현 커밋은 `tcp_output.c` 11곳과 `tcp.c` 1곳을 변경했다. 추가
 | 파일·함수 | 기존 연산 | V1 연결 |
 | --- | --- | --- |
 | `tcp_output.c`: `tcp_event_new_data_sent()` | RTX 직접 트리 삽입 | `rtx_append(sk, skb)` |
-| `tcp_insert_write_queue_after()` | RTX 분기 직접 트리 삽입 | `rtx_insert_ordered(sk, buff)` |
+| `tcp_insert_write_queue_after()` | RTX 분기 직접 트리 삽입 | V1에서는 `rtx_insert_ordered`; 후속 split 연결에서는 write queue 전용으로 축소 |
 | `tcp_send_loss_probe()` | 트리 마지막 항목 조회 | `rtx_last(sk)` |
 | `tcp_send_loss_probe()` | 분할 후 다음 항목 조회 | `rtx_next(sk, skb)` |
 | `tcp_collapse_retrans()` | 다음 항목 조회 | `rtx_next(sk, skb)` |
@@ -88,7 +88,7 @@ V1 구현 커밋은 `tcp_output.c` 11곳과 `tcp.c` 1곳을 변경했다. 추가
 
 신규 송신은 write queue에서 skb를 분리한 뒤 `rtx_append()`를 호출한다. 이후 `highest_sack`, `packets_out`, 타이머와 통계 처리는 원래 순서를 유지한다.
 
-`tcp_insert_write_queue_after()`의 write queue 분기는 그대로다. RTX 분기만 ordered insert로 연결했다. 이 단계는 RB 연결 패치이며, 하이브리드 분할에 필요한 변경 전 소속 저장을 구현하지 않는다.
+V1에서는 `tcp_insert_write_queue_after()`의 RTX 분기만 ordered insert로 연결했다. 후속 split 연결에서는 이 helper를 write queue 전용으로 축소하고, RTX 분할은 `tcp_fragment()`에서 prepare/commit으로 직접 처리한다. `tso_fragment()`도 단순화한 helper를 사용한다.
 
 `tcp_collapse_retrans()`의 `tcp_rtx_queue_unlink_and_free()`는 유지했다. 이 wrapper는 시간 큐 제거, 구조 제거와 메모리 해제를 수행하므로 `rtx_unlink()`만으로 대체할 수 없다.
 
@@ -108,7 +108,7 @@ SYNACK·TFO·SYN은 ordered insert를 사용한다. 특히 `tcp_send_syn_data()`
 | 수신용 일반 RB helper 유지 | `tcp_rbtree_insert()`는 수신 OFO 경로도 사용한다. | 저장소 전체에서 이 helper가 사라지는 것을 완료 기준으로 삼지 않는다. |
 | 하이브리드와 split을 후속 패치로 분리 | 현재 RB에서 검증 가능한 작업 단위를 확보한다. | 하이브리드 활성화 전 추가 계약과 검증이 필요하다. |
 
-후속 TREE split에는 우선 트리 전용 일반 ordered insert를 사용하는 방안을 B가 권고했다. 논리적 다음 항목의 자리가 항상 현재 노드의 빈 오른쪽 자식은 아니다. tail 직접 연결 최적화를 중간 분할에 그대로 적용하면 안 된다. 이 선택은 A의 최종 수락 및 구현 확인이 남아 있다.
+후속 TREE split에는 우선 트리 전용 일반 ordered insert를 사용하는 방안을 B가 권고했다. 논리적 다음 항목의 자리가 항상 현재 노드의 빈 오른쪽 자식은 아니다. tail 직접 연결 최적화를 중간 분할에 그대로 적용하면 안 된다. 이 선택은 A의 PR #9에서 내부 `__rtx_tree_insert()`로 반영됐다.
 
 ## 4. V1 검증 결과와 한계
 
@@ -149,11 +149,11 @@ make O=/work/out ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- -j4 net/ipv4/tcp.o 
 
 V1 커밋의 PR 생성 당시 GitHub Actions workflow와 등록된 commit check/status는 0개였다. 자동 검증이 없다는 뜻이며 CI 성공을 뜻하지 않는다. 환경·컴파일러·경로가 달라지면 객체 해시도 달라질 수 있다.
 
-## 5. 후속 split 패치의 계약 초안
+## 5. RB split 연결과 확정 계약
 
-이 절은 A가 전달한 초안과 B 측 검토 내용을 정리한다. 아래 함수와 token은 현재 Core 헤더에 없는 제안 인터페이스다. A의 최종 보완 답변과 구현은 아직 확인하지 않았다.
+A의 [PR #9](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/9)에서 split API와 계약이 제공됐다. B는 이를 `tcp_fragment()`에 연결했다. 계약의 기준은 `include/net/tcp_rtx.h`이며, 아래 서명은 DEBUG 필드를 생략한 요약이다.
 
-### 5.1 A가 제안한 인터페이스
+### 5.1 제공된 인터페이스
 
 ```c
 struct rtx_split_token {
@@ -167,7 +167,7 @@ void rtx_split_commit(struct sock *sk, struct rtx_split_token *tok,
 		      struct sk_buff *buff);
 ```
 
-`domain`은 prepare 당시 TREE 또는 LIST 소속을 나타낸다. debug 빌드에서는 원래 `seq`, `end_seq`를 추가 저장하는 제안이다. 상수와 debug 상태의 실제 정의는 A가 확정해야 한다. token은 소켓 직렬화 구간 안의 임시 상태이며 skb 참조 횟수를 늘리지 않는다.
+`domain`은 prepare 당시 TREE 또는 LIST 소속을 나타낸다. DEBUG 빌드에서는 원래 `seq`, `end_seq`를 추가 저장한다. 소속 상수는 `RTX_DOMAIN_TREE`/`RTX_DOMAIN_LIST`, 트랜잭션 상태는 `tcp_sock.rtx_txn_open`이다. 현재 backend는 TREE만 사용한다. token은 소켓 직렬화 구간 안의 임시 상태이며 skb 참조 횟수를 늘리지 않는다.
 
 ### 5.2 tcp_fragment의 연결 위치
 
@@ -177,29 +177,59 @@ void rtx_split_commit(struct sock *sk, struct rtx_split_token *tok,
 4. 현재 `tcp_insert_write_queue_after()` 호출 위치에서 RTX 큐이면 commit으로 연결한다. Write queue 분기는 기존 연결을 유지한다.
 5. 기존 `tcp_tsorted_anchor` 연결을 수행한 뒤 전체 상태가 안정된 지점에서 검증한다.
 
-현재 소스에는 prepare 제안 지점 이후 오류 반환 경로가 없다. 따라서 이 경로를 유지한다면 abort API가 필요하지 않다는 판단이다. 후속 변경이 실패 가능한 연산이나 조기 반환을 추가하면 이 전제를 다시 검토해야 한다.
+현재 소스에는 prepare 이후 오류 반환 경로가 없다. 따라서 이 경로를 유지한다면 abort API가 필요하지 않다는 판단이다. 후속 변경이 실패 가능한 연산이나 조기 반환을 추가하면 이 전제를 다시 검토해야 한다.
 
 RTX 분할은 `tcp_fragment()`의 공통 경로를 사용한다. 직접 호출 지점은 `tcp_output.c` 2곳, `tcp_input.c` 2곳, `tcp_recovery.c` 1곳이다. B의 함수 연결이 C의 SACK·RACK 동작에도 영향을 주므로 통합 검증이 필요하다.
 
 ### 5.3 commit 전제와 동작
 
-A 초안의 전제는 원래 skb의 `seq`가 유지되고, `skb.end_seq == buff.seq`이며, `buff.end_seq`가 원래 끝값과 같다는 것이다. 새 `buff`는 시퀀스 큐에 아직 연결되지 않아야 한다.
+확정 계약의 전제는 원래 skb의 `seq`가 유지되고, `skb.end_seq == buff.seq`이며, `buff.end_seq`가 원래 끝값과 같다는 것이다. 새 `buff`는 시퀀스 큐에 아직 연결되지 않아야 한다.
 
 | prepare 당시 소속 | commit 동작 |
 | --- | --- |
-| TREE | 새 뒷부분을 트리에 삽입한다. 원래 skb가 tree_last였다면 캐시를 buff로 갱신한다. |
-| LIST | 원래 skb 바로 뒤에 buff를 연결한다. 길이를 증가시키고 K 초과 시 리스트 head를 승격한다. |
+| TREE | 현재 RB 구현은 내부 tree-only ordered insert로 삽입한다. tree_last 캐시 갱신은 향후 캐시 구현 시 적용한다. |
+| LIST (미구현) | 향후 원래 skb 바로 뒤에 buff를 연결하고, K 초과 시 리스트 head를 승격한다. |
 
 K개 상태의 리스트 head를 분할하면 원래 skb 자신이 트리로 승격될 수 있다. commit 이후 호출자는 이전 소속을 가정하지 않는다. token은 commit 후 무효가 된다.
 
-### 5.4 B가 요청한 보완사항
+### 5.4 요청사항 반영과 호출부 검토
 
-- 변이 중 일반 공개 RTX API와 이를 호출하는 wrapper를 금지하는 범위를 확정한다. commit 자체와 token을 받는 내부 연결 연산은 허용해야 한다.
-- TREE commit은 저장된 소속을 이용하는 트리 전용 삽입으로 시작한다. 공개 ordered insert를 호출해 변이 중 소속을 재판별하지 않는다.
-- `WARN_ON_ONCE`는 위반 탐지이며 상태 복구가 아니다. 경고 후 연결을 생략해서 부분 변경 상태를 남기지 않도록 처리 방침을 정한다.
-- `RB_EMPTY_NODE()`나 `list_empty()`만으로 buff의 미연결 여부를 판정하지 않는다. 공유 union과 할당 초기화 규칙을 고려하고, 필요하면 debug 순회로 실제 중복 포함 여부를 확인한다.
-- 구조 검증과 전체 TCP 검증 시점을 구분한다. commit 직후에는 새 buff의 tsorted 연결이 아직 끝나지 않는다.
-- RB backend에도 동일한 split API를 먼저 제공한다. B가 호출부를 연결한 뒤 하이브리드 구현과 독립적으로 검증할 수 있어야 한다.
+- prepare~commit 사이에는 공개 `rtx_*`, 순회 매크로와 이를 사용하는 wrapper를 호출하지 않는다.
+- commit은 공개 ordered insert 대신 내부 트리 전용 삽입을 사용한다.
+- DEBUG 검사는 WARN으로 탐지만 한다. commit은 경고 때문에 연결을 생략하지 않는다.
+- buff 미연결 검사는 공유 링크 필드가 아니라 내부 시퀀스 포함 검색으로 수행한다.
+- 전체 TCP 상태 검증은 시간 큐 연결 이후에 해야 한다. 아직 없는 `rtx_validate()`는 호출하지 않는다.
+- B는 RTX 분기에서만 prepare/commit을 호출하고 기존 RTX 삽입을 대체했다. commit 뒤에 token을 재사용하지 않는다.
+- write queue와 `tso_fragment()`는 token 없이 기존 `__skb_queue_after()` 연결을 유지한다.
+- `tcp_skb_fragment_eor`, `skb_split`과 하위 분할·zerocopy 처리, `tcp_fragment_tstamp`, `tcp_set_skb_tso_segs`, `tcp_adjust_pcount`와 회계 검사, `__skb_header_release`를 검토했다. 해당 구간에 공개 RTX API 호출이나 `tcp_fragment()`에서의 오류 반환은 없다. 새 buff에 대한 기존 zerocopy 처리 의미도 변경하지 않는다.
+
+### 5.5 B 연결 검증 (2026-11-11)
+
+기준 HEAD는 `4fe3558d5e232aecc1c362f1c0457bc2c4c5516c`이며, 비교 소스는 해당 HEAD와 B의 `tcp_output.c` 패치만으로 준비했다. 작업 디렉터리의 무관한 변경은 비교 소스에서 제외했다.
+
+| 검증 | 결과 |
+| --- | --- |
+| `git diff --check` | 통과 |
+| 코드 패치 `checkpatch.pl --no-tree` | 오류 0, 경고 0, check 0 |
+| prepare/commit 경로·하위 함수 정적 검토 | 중복 삽입·금지 RTX 호출·중간 오류 반환 없음. write queue 분기와 기존 TCP 처리 순서 보존 |
+| 변경 전 DEBUG off/on `net/ipv4/`, `net/ipv6/` 빌드 | 두 설정 모두 성공 |
+| 변경 후 DEBUG off/on `net/ipv4/`, `net/ipv6/` 빌드 | 두 설정 모두 성공 |
+| 빌드 진단 비교 | 각 빌드 오류 0, 기존 호스트 인증서 도구의 OpenSSL 3 deprecated 경고 14개. 소스 경로 정규화 후 전후 경고 동일, 새 경고 없음 |
+| DEBUG 자체 테스트 포함 | on에서 `tcp_rtx_selftest.o` 빌드 및 비어 있지 않은 파일 확인. off에서는 빌드 로그에 없음 |
+| 컨테이너 정리 | 작업용 `rtx-b-split-20261111` 제거, 동일 이름 잔존 컨테이너 없음 |
+
+환경은 기존 `ubuntu:22.04` arm64 이미지(`962f6cadeae0`), Docker Linux, host GCC와 x86_64 cross GCC 모두 11.4.0이다. 커널 대상은 x86_64이며 `rtx_defconfig`에서 DEBUG만 off/on으로 설정하고 각각 `olddefconfig`를 실행했다. 네 빌드는 별도 출력 디렉터리에서 실행했다.
+
+```sh
+make O="$out" ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- rtx_defconfig
+scripts/config --file "$out/.config" -e TCP_RTX_DEBUG # off 비교군은 -d
+make O="$out" ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- olddefconfig
+make O="$out" ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- -j4 net/ipv4/ net/ipv6/
+```
+
+로컬 증거는 Git 제외 경로 `rtx-project/.work/b-split-validation/`에 보존했다. `build.sh`/`run.sh`, 기준 SHA와 tar, 코드 패치, 네 설정 및 SHA-256, 설정·빌드 로그, `diagnostics.txt`, `static-review.txt`, 정리 로그를 포함한다. 컨테이너 내부 빌드 오브젝트는 정리 시 제거했다. 전체 커널 링크나 바이너리 동등성 검증은 수행하지 않았다.
+
+실제 커널 부팅, 자체 테스트 실행, TCP 송수신·분할·재전송과 성능 측정은 미실행이다. 빌드 성공은 런타임 정확성을 의미하지 않는다.
 
 ## 6. 남은 작업과 완료 기준
 
@@ -207,14 +237,14 @@ K개 상태의 리스트 head를 분할하면 원래 skb 자신이 트리로 승
 | --- | --- | --- | --- |
 | 1 | V1 실제 커널 부팅·송수신 검증 | B·D, 지금 진행 가능 | 대상 커널 부팅 확인, payload 길이·해시와 종료 동작 확인 |
 | 2 | 분할·재전송 시나리오 준비 | B, C·D 협업 | 각 시나리오가 의도한 분할 경로를 실행한다는 관찰 방법 확보 |
-| 3 | RB용 split API 제공 | A, 위 초안 보완 | prepare/commit 계약과 RB 구현 제공, Core 테스트 통과 |
-| 4 | B split 연결 패치 | B, 3번 선행 | RTX에만 prepare/commit 적용, write queue와 기존 TCP 처리 보존, 빌드·회귀 통과 |
+| 3 | RB용 split API 제공 완료 (#9) | A | 계약·RB 구현 제공. A 보고 자체 테스트 결과는 A 문서 참조 |
+| 4 | B split 연결 구현, 실행 회귀 대기 | B·C·D | 정적·빌드 검증은 5.5절. 실제 분할과 TCP 회귀 통과는 별도 필요 |
 | 5 | 리스트와 승격 구현 통합 | A·B·C | K 경계, 원래 skb 승격, TREE/LIST 경계 분할에서 순서·캐시·힌트 검증 |
 | 6 | merge·trim·replace 계약과 연결 | A·B·C | token, 구조 제거, 시간 큐·해제 순서와 순회 재개 위치 확정 |
 | 7 | 캐시 및 tail 직접 연결 | A의 캐시 계약, B의 삽입 최적화 | 빈 트리·일반 삽입·삭제·교체에서 캐시 일치, RB 균형 유지 |
 | 8 | 비용 및 회귀 비교 | B·D, 통합 정확성 선행 | V1·캐시·tail·하이브리드의 효과를 분리해 측정 |
 
-1번과 2번은 A의 하이브리드 완성을 기다리지 않는다. 4번의 병합 가능한 패치에는 실제 split API가 필요하다. 존재하지 않는 API를 호출하는 코드만 커밋해서 빌드를 깨뜨리지 않는다.
+1번과 2번은 A의 하이브리드 완성을 기다리지 않는다. 4번의 API 의존성은 #9로 해소됐으며, 호출부 연결 이후의 실행 검증이 남아 있다.
 
 ### 6.1 split 공동 테스트
 
