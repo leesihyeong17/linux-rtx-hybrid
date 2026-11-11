@@ -122,6 +122,10 @@ static void transfer(size_t size, int reset)
 	printf("RTX_CASE %s bytes=%zu PASS\n", reset ? "reset" : "half-close", size);
 }
 
+#ifdef RTX_PACKET_CASES
+void run_packet_cases(void);
+#endif
+
 int main(void)
 {
 	struct ifreq req = { .ifr_name = "lo" };
@@ -152,6 +156,9 @@ int main(void)
 	transfer(4097, 0);
 	transfer(1024 * 1024, 0);
 	transfer(0, 1);
+#ifdef RTX_PACKET_CASES
+	run_packet_cases();
+#endif
 	puts("RTX_RUNTIME PASS");
 	sync();
 	reboot(LINUX_REBOOT_CMD_POWER_OFF);

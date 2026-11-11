@@ -8,12 +8,24 @@ output=$(mktemp -d "$repo/rtx-project/.work/b-runtime-XXXXXXXX")
 name="rtx-b-runtime-$(date +%s)-$$"
 image=${RTX_BUILD_IMAGE:-ubuntu:22.04}
 reuse=
-if [[ $# -gt 0 ]]; then
-    [[ $# -eq 2 && $1 == --kernel-results ]] || { echo 'Usage: run_b_runtime.sh [--kernel-results DIR]' >&2; exit 2; }
-    reuse=$(cd "$2" && pwd)
+mode=smoke
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --packets) mode=packets; shift ;;
+        --kernel-results)
+            [[ $# -ge 2 ]] || { echo 'Missing results directory' >&2; exit 2; }
+            reuse=$(cd "$2" && pwd); shift 2 ;;
+        *) echo 'Usage: run_b_runtime.sh [--packets] [--kernel-results DIR]' >&2; exit 2 ;;
+    esac
+done
+if [[ -n $reuse ]]; then
     (cd "$reuse" && shasum -a 256 -c SHA256SUMS) > "$output/reuse-checksums.log"
     built_sha=$(cat "$reuse/source-sha.txt")
     git -C "$repo" diff --exit-code "$built_sha" HEAD -- . ':!rtx-project' > "$output/kernel-source-diff.txt"
+    if [[ $mode == packets ]]; then
+        grep -qx 'CONFIG_KPROBE_EVENTS=y' "$reuse/kernel.config"
+        grep -qx 'CONFIG_TUN=y' "$reuse/kernel.config"
+    fi
 fi
 cleanup() {
     rc=$?
@@ -38,4 +50,9 @@ fi
 cp "$repo/rtx-project/tests/runtime/smoke.c" "$output/smoke.c"
 cp "$repo/rtx-project/scripts/b_runtime_container.sh" "$output/build.sh"
 cp "$0" "$output/runner.sh"
+printf '%s\n' "$mode" > "$output/mode.txt"
+if [[ $mode == packets ]]; then
+    cp "$repo/rtx-project/tests/runtime/packet_peer.c" "$output/"
+    cp "$repo/rtx-project/tests/runtime/check_packet_trace.py" "$output/"
+fi
 docker run --name "$name" --mount "type=bind,source=$output,target=/evidence" "$image" bash /evidence/build.sh

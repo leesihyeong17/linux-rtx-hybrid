@@ -2,7 +2,7 @@
 
 작성일: 2026-11-06 · 갱신일: 2026-11-11
 
-B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. V1 호출부 전환에 이어 RB backend의 split prepare/commit을 `tcp_fragment()`에 연결했다. 최근 리스트, 승격, 캐시와 tail 직접 연결 최적화는 아직 구현하지 않았다. split 연결 커널의 QEMU 부팅·기본 TCP 송수신 검증을 완료했다. 실제 분할 경로 검증은 후속 단계다.
+B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. V1 호출부 전환에 이어 RB backend의 split prepare/commit을 `tcp_fragment()`에 연결했다. 최근 리스트, 승격, 캐시와 tail 직접 연결 최적화는 아직 구현하지 않았다. split 연결 커널의 QEMU 부팅·기본 TCP 송수신 검증을 완료했다. SACK·TLP·RTO의 선정된 실제 분할 경로도 검증했다. 전체 회귀 매트릭스 완료는 아니다.
 
 이 문서는 B 담당자와 A·C·D 협업자가 현재 구현 범위, 검증 한계, 다음 패치의 선행 조건을 확인하기 위한 기록이다.
 
@@ -236,6 +236,12 @@ make O="$out" ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- -j4 net/ipv4/ net/ipv6
 2026-11-11, 커널 `7a7b4f9ac`의 DEBUG on 전체 빌드와 QEMU 부팅을 완료했다. A의 자체 테스트 495/0, IPv4 loopback payload·half-close 3건 및 reset 1건이 통과했고 새 WARN/OOPS/panic은 없었다. 전체 바이트 비교로 데이터와 길이를 검증했다. 실패한 테스트 harness와 의존성 수정 이력, 환경, 증거 및 재현 명령은 [B_RUNTIME_VALIDATION.md](B_RUNTIME_VALIDATION.md)에 기록했다. 작업용 컨테이너는 모두 제거했다.
 
 이 결과는 기본 통신 smoke이며 실제 RTX split 경로 실행이나 성능 향상의 근거로 사용하지 않는다.
+
+### 5.7 ③ 실제 분할·재전송 검증
+
+게스트 TUN 패킷 peer와 Kprobe/kretprobe를 추가했다. SACK 중간 구간 분할 2회, TLP tail 분할 1회, TLP를 끈 RTO 재전송 분할 1회를 실제로 관찰했고 모두 성공 반환했다. 각 사례의 4,000바이트 데이터, 최종 ACK 이후 TCP_INFO의 unacked/sacked/lost=0, FIN 종료를 확인했다. trace 덮어쓰기·호출 누락·오류 반환을 거부하는 판정기도 추가했다.
+
+재현 스크립트, 커널 이미지 체크섬, 실패 실행과 성공 실행의 로그 위치는 [실행 검증 문서](B_RUNTIME_VALIDATION.md)에 기록했다. 커널의 프로덕션 코드는 이번 단계에서 변경하지 않았다. 이 결과는 RACK, 모든 head/middle/tail 조합, FIN을 포함한 skb의 분할, wraparound, 할당 실패 주입 또는 시간 큐·힌트 전수 검증까지 포함하지 않는다.
 
 ## 6. 남은 작업과 완료 기준
 

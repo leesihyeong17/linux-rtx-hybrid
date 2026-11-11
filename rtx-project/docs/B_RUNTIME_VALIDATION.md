@@ -14,7 +14,7 @@ Docker가 필요하다. 실행 전에 기존 이미지·컨테이너를 확인�
 
 커널 소스는 실행 시점 **커밋된 HEAD**의 `git archive`다. 미커밋 커널 수정은 포함되지 않는다. 게스트 테스트·runner는 실행 시점 파일을 복사하고 체크섬으로 식별한다. 출력은 실행마다 새로운 `rtx-project/.work/b-runtime-*`에 보존한다. 원시 결과와 커널 산출물은 Git에서 제외한다.
 
-설정은 x86_64_defconfig에 TCP_RTX_DEBUG, initramfs, serial console, TUN, tracing을 활성화하고 MODULES를 비활성화한 테스트 전용 설정이다. 기존 `rtx_defconfig`의 부분 빌드 검증과 구분한다. QEMU TCG 1 vCPU/512 MiB, 외부 NIC 없음. 성능 측정 환경이 아니다.
+②의 설정은 x86_64_defconfig에 TCP_RTX_DEBUG, initramfs, serial console, TUN, tracing을 활성화하고 MODULES를 비활성화한 테스트 전용 설정이다. 기존 `rtx_defconfig`의 부분 빌드 검증과 구분한다. QEMU TCG 1 vCPU/512 MiB, 외부 NIC 없음. 성능 측정 환경이 아니다.
 
 ## ② 부팅·기본 송수신
 
@@ -49,4 +49,41 @@ Docker가 필요하다. 실행 전에 기존 이미지·컨테이너를 확인�
 
 ## 남은 범위
 
-IPv6, 실제 NIC, 여러 CPU, ARM64·팀 VM, 할당/unclone 실패 주입, SACK/RACK/TLP 개별 경로, FIN/GSO/sequence wrap 조합, 내부 시간 큐·회계·힌트의 전수 검증은 기본 smoke 통과 범위에 포함하지 않는다. 실제 분할 결과는 ③의 패킷 시나리오와 추적 증거로 별도 판정한다.
+IPv6, 실제 NIC, 여러 CPU, ARM64·팀 VM, 할당/unclone 실패 주입, FIN/GSO/sequence wrap 조합, 내부 시간 큐·회계·힌트의 전수 검증은 기본 smoke 통과 범위에 포함하지 않는다. SACK/TLP/RTO의 선정 경로는 아래 ③에서 추가 검증했다. RACK 개별 경로는 아직 미검증이다. 실제 분할 결과는 ③의 패킷 시나리오와 추적 증거로 별도 판정한다.
+
+## ③ 실제 SACK·TLP·RTO 분할 및 재전송
+
+```sh
+rtx-project/scripts/run_b_runtime.sh --packets
+python3 -m unittest discover -s rtx-project/tests/runtime -p 'test_*.py'
+```
+
+이 모드는 MODULES/KPROBES/KPROBE_EVENTS를 활성화한 커널을 사용한다. Linux 5.4의 KPROBES가 MODULES에 의존하기 때문이다. 기존 ② 이미지는 이 조건을 만족하지 않아 재사용할 수 없다. 이후 같은 추적 설정의 이미지는 `--packets --kernel-results <결과>`로 재사용할 수 있다.
+
+게스트 전용 TUN에 `198.18.0.1/24`를 설정하고 사용자 공간 패킷 peer가 `198.18.0.2:8080`으로 응답한다. SYN/SYNACK으로 MSS=1000과 SACK을 협상하고 실제 TCP 소켓에서 4,000바이트를 송신한다. 수신 데이터는 전 바이트를 검사한다.
+
+- SACK: 누적 ACK는 진행하지 않고 중간 MSS `[base+1000, base+2000)`만 SACK한다. TCP_INFO의 sacked=1, unacked=4를 확인한다.
+- LOSS: tcp_early_retrans=3으로 ACK를 보류하고 실제 중복 데이터 패킷을 수신한 뒤 payload를 검사한다. 이번 추적에서는 tcp_send_loss_probe의 호출을 확인했다.
+- RTO: tcp_early_retrans=0으로 TLP를 끄고 ACK를 보류한다. __tcp_retransmit_skb에서의 분할과 중복 데이터 수신을 확인한다.
+- 세 경우 모두 최종 ACK 후 unacked/sacked/lost=0과 FIN 종료를 확인한다.
+- x86_64 진입 레지스터에서 `tcp_fragment`의 queue/len을, kretprobe에서 반환값을 기록한다. 스택 추적으로 호출 경로도 남긴다. 프로덕션 TCP 코드는 변경하지 않는다.
+- 시나리오별 RTX(queue=1) 분할 호출이 적어도 한 번 있고, 모든 반환이 0이며, trace 덮어쓰기가 없어야 성공이다. 단순히 최종 PASS 문자열이 있는 것만으로 통과시키지 않는다.
+- 추적 판정기의 단위 테스트는 분할 누락, write queue 오인, -ENOMEM 반환, trace 덮어쓰기, 재전송 미발생, 시나리오 누락을 거부하는지 확인한다.
+
+### 실행 기록
+
+2026-11-11, kernel source `038f8b180` (②의 테스트·문서 커밋이며 TCP 코드는 `7a7b4f9ac`와 동일), cross GCC 11.4.0 / QEMU 6.2.0에서 실행했다.
+
+| 시나리오 | 관찰한 tcp_fragment 호출자 | RTX 분할·성공 반환 | 데이터 및 회계 |
+| --- | --- | --- | --- |
+| SACK | `tcp_match_skb_to_sack` | len=1000 두 번, 모두 0 | 4000바이트 일치, sacked=1/unacked=4 확인, 최종 ACK 후 해소 |
+| LOSS (TLP) | `tcp_send_loss_probe` | len=3000 한 번, 0 | 4000바이트 일치, 1000바이트 재전송 수신, 최종 ACK 후 해소 |
+| RTO | `__tcp_retransmit_skb` | len=1000 한 번, 0 | 4000바이트 일치, 1000바이트 재전송 수신, 최종 ACK 후 해소 |
+
+모든 추적의 queue=1(RTX)이며 buffer 기록 수는 15/15로 덮어쓰기가 없었다. 기본 통신 4건 및 A 자체 테스트 495/0도 함께 통과했다. 성공 실행에 WARN/OOPS/panic이 없고 runner 종료 코드는 0이다. SACK 사례의 `total_retrans=1`도 원시 로그에 남겼으며, 이 시나리오를 무재전송 검사로 해석하지 않는다.
+
+증거: `.work/b-runtime-TeNAlMRK/`의 `serial.log`, `trace-summary.txt`, `SHA256SUMS`, 환경·설정·정리 로그. 추적 커널의 전체 빌드 로그는 `.work/b-runtime-nFfGZmCz/`에 있다. 커널 SHA-256은 `c4819318f877e2e893e2d819de5a433e4d720cd20080db362f1e1e47bd11ff48`이다. 테스트 전용 컨테이너는 제거했고 잔존이 없음을 확인했다.
+
+최초 `nFfGZmCz` 실행은 IPv4 전용 peer의 비-IPv4/TCP 패킷 처리에서 실패했다. 게스트 TUN의 IPv6 자동 설정을 끄고 `TeNAlMRK`에서 재검증했다. 당시 테스트 PID 1의 오류 종료가 kernel panic으로 표시된 실패 로그도 보존했다. 이후 테스트 오류는 실패 마커를 출력하고 종료하도록 보완했다.
+
+새 추적 판정기 단위 테스트 7건이 통과했다. 기존 환경 수집·V0 준비 테스트 17건은 macOS의 GNU 도구 누락으로 직접 실행에 실패했으나 Linux 컨테이너에 필요한 git/openssl/rsync를 설치한 뒤 17/17 통과했다 (`nFfGZmCz/existing-tests.log`). 이 단위 테스트 결과는 TCP 실행 검증과 별개다.
