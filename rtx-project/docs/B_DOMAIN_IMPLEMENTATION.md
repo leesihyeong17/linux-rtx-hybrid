@@ -2,7 +2,7 @@
 
 작성일: 2026-11-06 · 갱신일: 2026-11-11
 
-B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. V1 호출부 전환에 이어 RB backend의 split prepare/commit을 `tcp_fragment()`에 연결했다. 최근 리스트, 승격, 캐시와 tail 직접 연결 최적화는 아직 구현하지 않았다. split 연결의 실제 커널 실행 검증은 미실행이다.
+B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. V1 호출부 전환에 이어 RB backend의 split prepare/commit을 `tcp_fragment()`에 연결했다. 최근 리스트, 승격, 캐시와 tail 직접 연결 최적화는 아직 구현하지 않았다. split 연결 커널의 QEMU 부팅·기본 TCP 송수신 검증을 완료했다. 실제 분할 경로 검증은 후속 단계다.
 
 이 문서는 B 담당자와 A·C·D 협업자가 현재 구현 범위, 검증 한계, 다음 패치의 선행 조건을 확인하기 위한 기록이다.
 
@@ -229,7 +229,13 @@ make O="$out" ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- -j4 net/ipv4/ net/ipv6
 
 로컬 증거는 Git 제외 경로 `rtx-project/.work/b-split-validation/`에 보존했다. `build.sh`/`run.sh`, 기준 SHA와 tar, 코드 패치, 네 설정 및 SHA-256, 설정·빌드 로그, `diagnostics.txt`, `static-review.txt`, 정리 로그를 포함한다. 컨테이너 내부 빌드 오브젝트는 정리 시 제거했다. 전체 커널 링크나 바이너리 동등성 검증은 수행하지 않았다.
 
-실제 커널 부팅, 자체 테스트 실행, TCP 송수신·분할·재전송과 성능 측정은 미실행이다. 빌드 성공은 런타임 정확성을 의미하지 않는다.
+이 부분 빌드 시점에는 실제 커널 부팅, 자체 테스트 실행, TCP 송수신·분할·재전송과 성능 측정은 미실행이었다. 후속 실행 결과는 5.6절을 참조한다. 빌드 성공만으로 런타임 정확성을 판단하지 않는다.
+
+### 5.6 ② 부팅·기본 송수신 검증
+
+2026-11-11, 커널 `7a7b4f9ac`의 DEBUG on 전체 빌드와 QEMU 부팅을 완료했다. A의 자체 테스트 495/0, IPv4 loopback payload·half-close 3건 및 reset 1건이 통과했고 새 WARN/OOPS/panic은 없었다. 전체 바이트 비교로 데이터와 길이를 검증했다. 실패한 테스트 harness와 의존성 수정 이력, 환경, 증거 및 재현 명령은 [B_RUNTIME_VALIDATION.md](B_RUNTIME_VALIDATION.md)에 기록했다. 작업용 컨테이너는 모두 제거했다.
+
+이 결과는 기본 통신 smoke이며 실제 RTX split 경로 실행이나 성능 향상의 근거로 사용하지 않는다.
 
 ## 6. 남은 작업과 완료 기준
 
