@@ -1,7 +1,7 @@
 # #14 LIST·승격 backend와 B 호출 경로 통합
 
 이슈: https://github.com/leesihyeong17/linux-rtx-hybrid/issues/14
-PR: 생성 후 연결한다.
+PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/17
 기준: `231db9ed6` (B #13과 A stats 포함), 브랜치 `a,b/list-impl`.
 
 ## 목표와 범위
