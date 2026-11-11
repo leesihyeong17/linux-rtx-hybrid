@@ -49,7 +49,7 @@ Docker가 필요하다. 실행 전에 기존 이미지·컨테이너를 확인�
 
 ## 남은 범위
 
-IPv6, 실제 NIC, 여러 CPU, ARM64·팀 VM, 할당/unclone 실패 주입, FIN/GSO/sequence wrap 조합, 내부 시간 큐·회계·힌트의 전수 검증은 기본 smoke 통과 범위에 포함하지 않는다. SACK/TLP/RTO의 선정 경로는 아래 ③에서 추가 검증했다. RACK 개별 경로는 아직 미검증이다. 실제 분할 결과는 ③의 패킷 시나리오와 추적 증거로 별도 판정한다.
+IPv6, 실제 NIC, 여러 CPU, ARM64·팀 VM, 할당/unclone 실패 주입, FIN/GSO/sequence wrap 조합, 내부 시간 큐·회계·힌트의 전수 검증은 기본 smoke 통과 범위에 포함하지 않는다. SACK/TLP/RTO의 선정 경로는 아래 ③에서 추가 검증했다. 당시 RACK 개별 경로는 미검증이었다. 아래 추가 fixture 절에서 분할 후 RACK의 시간 큐 소비를 검증했다. 실제 분할 결과는 ③의 패킷 시나리오와 추적 증거로 별도 판정한다.
 
 ## ③ 실제 SACK·TLP·RTO 분할 및 재전송
 
@@ -87,3 +87,19 @@ python3 -m unittest discover -s rtx-project/tests/runtime -p 'test_*.py'
 최초 `nFfGZmCz` 실행은 IPv4 전용 peer의 비-IPv4/TCP 패킷 처리에서 실패했다. 게스트 TUN의 IPv6 자동 설정을 끄고 `TeNAlMRK`에서 재검증했다. 당시 테스트 PID 1의 오류 종료가 kernel panic으로 표시된 실패 로그도 보존했다. 이후 테스트 오류는 실패 마커를 출력하고 종료하도록 보완했다.
 
 새 추적 판정기 단위 테스트 7건이 통과했다. 기존 환경 수집·V0 준비 테스트 17건은 macOS의 GNU 도구 누락으로 직접 실행에 실패했으나 Linux 컨테이너에 필요한 git/openssl/rsync를 설치한 뒤 17/17 통과했다 (`nFfGZmCz/existing-tests.log`). 이 단위 테스트 결과는 TCP 실행 검증과 별개다.
+
+
+## ③ 추가 회귀: 실제 커널 fixture와 보고서 근거
+
+2026-11-11, `b-integration-kiJKsMWl`에서 DEBUG on 계측 커널을 전체 빌드·부팅했다. 기준 production HEAD는 `98eaccc0353af4e324447098a3f3a50e38092481`이며 시험 harness는 별도로 복사·hash 보존했다. 공개 API와 production 파일은 변경하지 않았다.
+
+| 항목 | assertion 결과 | 비교·선택 근거와 스크린샷 |
+| --- | --- | --- |
+| unclone/할당 오류 경계와 재시도 | 38 통과 | [실패 복구 문서](B_SPLIT_FAILURE_VALIDATION.md) |
+| head/middle/tail, 재분할, FIN/GSO/wrap | 172 통과 | [경계 문서](B_SPLIT_BOUNDARY_VALIDATION.md) |
+| write queue, tso fast path, Reno 손실 표시 | 49 통과 | [호출 경로 문서](B_SPLIT_CALLER_VALIDATION.md) |
+| 회계·힌트·tsorted, 음성 대조군, RACK 소비 | 26 통과 | [불변식 문서](B_SPLIT_INVARIANT_VALIDATION.md) |
+
+합계 285 assertion, adapter 자체 테스트 495개, 기본 TCP smoke 4개가 통과했다. 커널 WARN/BUG/Oops/panic은 없었다. 첫 실행은 clone fixture의 경고 때문에 실패로 기록하고, 기존 TCP save/restore 규칙을 적용한 뒤 재실행했다. 실패·성공 원본과 캡처를 모두 보존했다.
+
+이는 위 SACK/TLP/RTO 패킷 실행과 구별되는 추가 근거다. 특정 상태를 구성한 뒤 실제 커널 함수를 실행했으므로 네트워크 전 과정을 거친 동일 조건의 검증이라고 표현하지 않는다. allocator 내부 실패, 실제 wire wrap, IPv6/NIC/다중 CPU/ARM64는 여전히 별도 범위다. 새 빌드 경고가 없다는 비교도 이전 DEBUG on 빌드 기준이며 DEBUG off/on 재실행이나 성능 비교가 아니다.

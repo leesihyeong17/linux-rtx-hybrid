@@ -2,7 +2,7 @@
 
 작성일: 2026-11-06 · 갱신일: 2026-11-11
 
-B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. V1 호출부 전환에 이어 RB backend의 split prepare/commit을 `tcp_fragment()`에 연결했다. 최근 리스트, 승격, 캐시와 tail 직접 연결 최적화는 아직 구현하지 않았다. split 연결 커널의 QEMU 부팅·기본 TCP 송수신 검증을 완료했다. SACK·TLP·RTO의 선정된 실제 분할 경로도 검증했다. 전체 회귀 매트릭스 완료는 아니다.
+B 도메인은 TCP 송신 경로를 공통 재전송 큐 API에 연결한다. V1 호출부 전환에 이어 RB backend의 split prepare/commit을 `tcp_fragment()`에 연결했다. 최근 리스트, 승격, 캐시와 tail 직접 연결 최적화는 아직 구현하지 않았다. split 연결 커널의 QEMU 부팅·기본 TCP 송수신 검증을 완료했다. SACK·TLP·RTO의 선정된 실제 분할 경로도 검증했다. 후속 계측 커널에서 위치·FIN/GSO/wrap, 실패 복구, write queue·Reno 호출, 회계·힌트·시간 큐와 RACK 소비의 선정 회귀를 추가 완료했다. 전체 TCP 정확성이나 모든 네트워크 조합을 입증한 것은 아니다.
 
 이 문서는 B 담당자와 A·C·D 협업자가 현재 구현 범위, 검증 한계, 다음 패치의 선행 조건을 확인하기 위한 기록이다.
 
@@ -283,17 +283,19 @@ MANIFEST에는 VirtualBox PMU 미지원이 기록되어 있다. 해당 환경에
 | 이슈 단위 | 상태 | 결과·남은 조건 |
 | --- | --- | --- |
 | ② 빌드·부팅·기본 송수신 | QEMU DEBUG on 완료 | DEBUG off/on 부분 빌드, DEBUG on 전체 링크·부팅, 4개 기본 TCP 사례 통과. 팀 VM/ARM64 실행은 별도 |
-| ③ 실제 분할·회귀 | 선정한 3개 시나리오 완료, 전체 이슈는 미완료 | SACK·TLP·RTO 실제 분할·성공 반환, 데이터·일부 회계 확인. 아래 체크리스트가 남음 |
+| ③ 실제 분할·회귀 | 패킷 3종 + 잔여 선정 fixture 완료 | 아래 6개 항목을 실제 계측 커널에서 확인. 285 assertion 통과. allocator 내부 실패, wire wrap, 다중 CPU 등은 별도 |
 | ④ 문서 갱신 | 완료 | 실제 계약, 현재 구현, 결과·환경·실패 기록·원시 로그 위치·미검증 범위를 반영 |
 
-③의 잔여 검증은 다음과 같다. 기존 A 구조 테스트 결과를 B 실제 연결 경로의 실행 증거로 대체하지 않는다.
+③에서 남았던 항목의 추가 실행 결과는 다음과 같다. 기존 A 구조 테스트와 별도로 B 실제 함수의 fixture를 실행했다. 체크 표시는 아래에 명시한 시험 수준의 완료이며 모든 입력·네트워크 환경의 완전 검증을 뜻하지 않는다.
 
 - [x] 실제 `tcp_fragment()`에서 head·중간·tail × 3개 시퀀스 기준의 9개 조합과 단일 skb 재분할을 실행했다. [경계 검증과 트레이드오프](B_SPLIT_BOUNDARY_VALIDATION.md): 172 assertion 통과. 가능한 모든 길이의 전수 검증은 아니다.
 - [x] 실제 커널 skb에서 FIN/PSH 이동, GSO pcount 4→5, 데이터의 32비트 sequence wrap을 확인했다. fixture 실행이며 네트워크상의 wrap 송수신과는 구분한다.
 - [x] 할당·unclone 호출 경계에 실패를 주입해 prepare 이전 종료, 큐·회계 보존과 재시도를 확인했다. [실패 복구 검증과 트레이드오프](B_SPLIT_FAILURE_VALIDATION.md): 38 assertion 통과. allocator 내부 실패 주입은 별도 범위다.
 - [x] write queue의 tcp_fragment와 page fragment를 가진 tso_fragment를 실제 실행했다. 두 경로 모두 RTX transaction 0회다. [호출 경로 검증](B_SPLIT_CALLER_VALIDATION.md): 손실 경로와 합계 49 assertion 통과.
 - [x] tcp_mark_head_lost와 tcp_newreno_mark_lost의 실제 분할을 fixture로 재현했다. tcp_recovery.c의 직접 분할 호출자는 RACK가 아니라 NewReno다. RACK의 시간 큐 소비 검증은 별도 불변식 항목으로 구분한다.
-- [ ] 시간 큐 연결·힌트의 직접 불변식 검사를 마련한다. 현재 TCP_INFO와 WARN 부재만으로 전체 내부 상태를 입증하지 않는다.
+- [x] 시간 큐 연결·세 힌트·회계의 직접 검사를 추가하고 잘못된 상태 3종을 거부하는 음성 대조도 실행했다. 분할 결과를 소비하는 실제 RACK도 확인했다. [불변식 검증과 트레이드오프](B_SPLIT_INVARIANT_VALIDATION.md): 26 assertion 통과.
+
+추가 실행 `b-integration-kiJKsMWl`의 원시 로그·환경·체크섬·첫 실패 분석·스크린샷은 위 항목별 문서에 연결했다. production TCP 코드와 A 공개 API는 변경하지 않았다. 실패 주입은 호출 경계 방식이고, 시퀀스 wrap은 커널 skb fixture 방식이다. 실제 allocator 내부 고갈, wire상의 wrap/FIN 조합, IPv6, 실제 NIC offload, 다중 CPU·타이머 경합, ARM64·팀 VM은 아직 미검증이다.
 
 캐시·tail 최적화, LIST/승격, merge·trim·replace와 성능 측정은 이번 ②~④의 구현 범위 밖이며 A·C 계약 및 별도 검증이 필요하다.
 
