@@ -397,6 +397,12 @@ struct tcp_sock {
 	 */
 	struct request_sock __rcu *fastopen_rsk;
 	u32	*saved_syn;
+#ifdef CONFIG_TCP_RTX_HYBRID
+	struct list_head rtx_recent;
+	struct sk_buff *rtx_tree_first;
+	struct sk_buff *rtx_tree_last;
+	u32 rtx_recent_len;
+#endif
 #ifdef CONFIG_TCP_RTX_STATS
 	u32	rtx_count;	/* skbs in the rtx queue (measurement only) */
 #endif

@@ -1288,6 +1288,7 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 			    bool dup_sack)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	struct rtx_shift_token tok;
 	u32 start_seq = TCP_SKB_CB(skb)->seq;	/* start of newly-SACKed */
 	u32 end_seq = start_seq + shifted;	/* end of newly-SACKed */
 
@@ -1307,6 +1308,7 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 	if (skb == tp->lost_skb_hint)
 		tp->lost_cnt_hint += pcount;
 
+	rtx_shift_prepare(sk, skb, &tok);
 	TCP_SKB_CB(prev)->end_seq += shifted;
 	TCP_SKB_CB(skb)->seq += shifted;
 
@@ -1332,6 +1334,7 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 	if (skb->len > 0) {
 		BUG_ON(!tcp_skb_pcount(skb));
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_SACKSHIFTED);
+		rtx_shift_commit(sk, &tok, false);
 		return false;
 	}
 
@@ -1350,13 +1353,16 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 		TCP_SKB_CB(prev)->end_seq++;
 
 	if (skb == tcp_highest_sack(sk))
-		tcp_advance_highest_sack(sk, skb);
+		tp->highest_sack = tok.next;
 
 	tcp_skb_collapse_tstamp(prev, skb);
 	if (unlikely(TCP_SKB_CB(prev)->tx.delivered_mstamp))
 		TCP_SKB_CB(prev)->tx.delivered_mstamp = 0;
 
-	tcp_rtx_queue_unlink_and_free(skb, sk);
+	rtx_shift_commit(sk, &tok, true);
+	list_del(&skb->tcp_tsorted_anchor);
+	tcp_skb_tsorted_anchor_cleanup(skb);
+	sk_wmem_free_skb(sk, skb);
 
 	NET_INC_STATS(sock_net(sk), LINUX_MIB_SACKMERGED);
 
