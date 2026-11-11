@@ -290,7 +290,7 @@ MANIFEST에는 VirtualBox PMU 미지원이 기록되어 있다. 해당 환경에
 
 - [ ] 실제 `tcp_fragment()`에서 TREE head·중간·tail 및 단일 skb 재분할의 모든 조합을 관찰한다. 현재 SACK/TLP/RTO의 4회 관찰은 전체 조합의 증명이 아니다.
 - [ ] FIN이 데이터와 같은 skb에 포함된 상태의 분할, 실제 TCP sequence wraparound를 검증한다. 현재 FIN 종료 및 A 모델 wraparound 테스트와 구분한다.
-- [ ] 할당·unclone 실패를 실제로 주입하고 prepare 이전 종료, 큐·회계 보존을 확인한다. 현재 결과는 정적 검토뿐이다.
+- [x] 할당·unclone 호출 경계에 실패를 주입해 prepare 이전 종료, 큐·회계 보존과 재시도를 확인했다. [실패 복구 검증과 트레이드오프](B_SPLIT_FAILURE_VALIDATION.md): 38 assertion 통과. allocator 내부 실패 주입은 별도 범위다.
 - [ ] write queue의 실제 분할 경로를 별도로 추적한다. 현재는 코드 검토와 기본 TCP smoke로 확인했다.
 - [ ] C와 RACK 및 Reno 손실 표시의 나머지 호출 경로를 재현한다.
 - [ ] 시간 큐 연결·힌트의 직접 불변식 검사를 마련한다. 현재 TCP_INFO와 WARN 부재만으로 전체 내부 상태를 입증하지 않는다.
