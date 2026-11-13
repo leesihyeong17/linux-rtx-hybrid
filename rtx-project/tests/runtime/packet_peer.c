@@ -33,8 +33,10 @@ static void check(int ok, const char *what)
 	if (!ok) {
 		fprintf(stderr, "RTX_PACKET FAIL %s errno=%d\n", what, errno);
 		fflush(NULL);
+#ifndef RTX_NATIVE_PEER
 		sync();
 		reboot(LINUX_REBOOT_CMD_POWER_OFF);
+#endif
 		_exit(1);
 	}
 }
@@ -85,8 +87,8 @@ static void reply(uint32_t ack, int syn, int fin, int sack)
 		unsigned char options[] = {2, 4, 3, 232, 4, 2, 1, 1};
 		memcpy(opt, options, sizeof(options));
 	} else if (sack) {
-		uint32_t left = htonl(base_seq + 1000);
-		uint32_t right = htonl(base_seq + 2000);
+		uint32_t left = htonl(base_seq + (sack == 2 ? 0 : 1000));
+		uint32_t right = htonl(base_seq + (sack == 2 ? 1000 : 2000));
 		opt[0] = 1; opt[1] = 1; opt[2] = 5; opt[3] = 10;
 		memcpy(opt + 4, &left, 4);
 		memcpy(opt + 8, &right, 4);
@@ -110,7 +112,9 @@ static struct tcphdr *receive(unsigned char *packet, int *payload)
 	check(n >= 40, "short packet");
 	ip = (void *)packet;
 	check(ip->version == 4 && ip->protocol == IPPROTO_TCP, "IPv4 TCP");
+	check(ip->ihl >= 5 && n >= ip->ihl * 4 + 20, "IPv4 header length");
 	tcp = (void *)(packet + ip->ihl * 4);
+	check(tcp->doff >= 5 && n >= ip->ihl * 4 + tcp->doff * 4, "TCP header length");
 	*payload = ntohs(ip->tot_len) - ip->ihl * 4 - tcp->doff * 4;
 	check(*payload >= 0 && n >= ntohs(ip->tot_len), "packet length");
 	check(!tcp->rst, "unexpected reset");
@@ -127,8 +131,9 @@ static void write_file(const char *path, const char *value)
 
 static void packet_case(int scenario)
 {
-	int sack = scenario == 1;
-	const char *name = sack ? "SACK" : scenario == 0 ? "LOSS" : "RTO";
+	int sack = scenario == 1 || scenario == 5;
+	const char *name = scenario == 3 ? "PARTIAL" : scenario == 4 ? "DSACK" :
+		scenario == 5 ? "RENEGING" : sack ? "SACK" : scenario == 0 ? "LOSS" : "RTO";
 	char marker[32];
 	struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(8080) };
 	unsigned char packet[65536], data[4000];
@@ -138,7 +143,11 @@ static void packet_case(int scenario)
 	uint32_t offset;
 
 	snprintf(marker, sizeof(marker), "CASE %s\n", name);
+#ifdef RTX_NATIVE_PEER
+	printf("RTX_NATIVE %s", marker);
+#else
 	write_file("/sys/kernel/debug/tracing/trace_marker", marker);
+#endif
 	write_file("/proc/sys/net/ipv4/tcp_early_retrans", scenario == 2 ? "0\n" : "3\n");
 	sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 	check(sock >= 0, "socket");
@@ -170,8 +179,27 @@ static void packet_case(int scenario)
 		socklen_t info_len = sizeof(info);
 		check(!getsockopt(sock, IPPROTO_TCP, TCP_INFO, &info, &info_len), "TCP_INFO");
 		check(info.tcpi_sacked == 1 && info.tcpi_unacked == 4, "SACK packet accounting");
-		printf("RTX_ACCOUNT SACK unacked=%u sacked=%u\n", info.tcpi_unacked, info.tcpi_sacked);
-	} else {
+		printf("RTX_ACCOUNT %s unacked=%u sacked=%u\n", name, info.tcpi_unacked, info.tcpi_sacked);
+		if (scenario == 5) {
+			/* Discard the SACKed middle MSS, ACK only the first MSS. */
+			reply(base_seq + 1000, 0, 0, 0);
+			do { tcp = receive(packet, &payload); } while (!payload);
+			offset = ntohl(tcp->seq) - base_seq;
+			check(offset == 1000 && offset + payload <= sizeof(data), "reneged retransmit range");
+			check(!memcmp((unsigned char *)tcp + tcp->doff * 4, data + offset, payload), "reneged payload");
+			duplicate = payload;
+		}
+	} else if (scenario == 3) {
+		/* Packet behavior only; internal GSO/trim proof is separate. */
+		reply(base_seq + 2000, 0, 0, 0);
+		usleep(10000);
+		struct tcp_info partial;
+		socklen_t partial_len = sizeof(partial);
+		check(!getsockopt(sock, IPPROTO_TCP, TCP_INFO, &partial, &partial_len), "partial TCP_INFO");
+		check(partial.tcpi_unacked == 2 && !partial.tcpi_sacked && !partial.tcpi_lost,
+		      "partial ACK packet accounting");
+		printf("RTX_ACCOUNT PARTIAL acked_bytes=2000 unacked=2 sacked=0 lost=0\n");
+	} else if (scenario != 4) {
 		/* Withhold all ACKs until the kernel retransmits actual data. */
 		do { tcp = receive(packet, &payload); } while (!payload);
 		offset = ntohl(tcp->seq) - base_seq;
@@ -186,6 +214,11 @@ static void packet_case(int scenario)
 	check(!getsockopt(sock, IPPROTO_TCP, TCP_INFO, &info, &info_len), "TCP_INFO after ACK");
 	check(!info.tcpi_unacked && !info.tcpi_sacked && !info.tcpi_lost, "drained packet accounting");
 	printf("RTX_ACCOUNT %s drained=1 total_retrans=%u\n", name, info.tcpi_total_retrans);
+	if (scenario == 4) {
+		/* A duplicate range below snd_una; verify TCPDSACKRecv separately. */
+		reply(base_seq + sizeof(data), 0, 0, 2);
+		usleep(10000);
+	}
 	check(!shutdown(sock, SHUT_WR), "shutdown");
 	do { tcp = receive(packet, &payload); } while (!tcp->fin);
 	reply(base_seq + sizeof(data) + 1, 0, 1, 0);
@@ -204,8 +237,10 @@ void run_packet_cases(void)
 	struct sockaddr_in *addr = (void *)&req.ifr_addr;
 	int ctl;
 
+#ifndef RTX_NATIVE_PEER
 	mkdir("/dev/net", 0755);
 	check(!mknod("/dev/net/tun", S_IFCHR | 0600, makedev(10, 200)), "tun node");
+#endif
 	tun = open("/dev/net/tun", O_RDWR);
 	check(tun >= 0, "tun");
 	req.ifr_flags = IFF_TUN | IFF_NO_PI;
@@ -220,6 +255,12 @@ void run_packet_cases(void)
 	req.ifr_flags = IFF_UP | IFF_RUNNING;
 	check(!ioctl(ctl, SIOCSIFFLAGS, &req), "interface up");
 	close(ctl);
+#ifdef RTX_NATIVE_PEER
+	packet_case(1);
+	packet_case(3);
+	packet_case(4);
+	packet_case(5);
+#else
 	check(!mount("debugfs", "/sys/kernel/debug", "debugfs", 0, NULL), "debugfs");
 	write_file("/sys/kernel/debug/tracing/kprobe_events", "p:rtx_fragment tcp_fragment queue=%si:u32 len=%cx:u32\nr:rtx_result tcp_fragment result=$retval:s32\n");
 	write_file("/sys/kernel/debug/tracing/events/kprobes/rtx_fragment/trigger", "stacktrace\n");
@@ -238,5 +279,6 @@ void run_packet_cases(void)
 	check(!n, "trace read");
 	puts("RTX_TRACE_END");
 	close(fd);
+#endif
 	close(tun);
 }
