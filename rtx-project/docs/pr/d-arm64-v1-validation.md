@@ -2,7 +2,8 @@
 
 작성 기준: 2026-11-13 KST. 브랜치 `test/d-arm64-v1-validation`.
 커널 코드의 기준은 아래 SHA로 고정한다. 이 브랜치의 후속 테스트·문서 커밋을
-커널 빌드 SHA로 대체하지 않는다. 원격 push·PR 게시는 아직 하지 않았다.
+커널 빌드 SHA로 대체하지 않는다. 사용자가 `65f68c267`까지 원격 브랜치 push를
+완료했다. 아래 C 리뷰 후속 변경의 push와 PR 게시 상태는 별도로 확인한다.
 
 ## 목적과 구현
 
@@ -23,9 +24,12 @@ TCP 검증의 결과를 구분해서 보존한다.
   `available_filter_functions`를 구분한다. 부팅이 다르면 ftrace는 NOT RUN이다.
   추적 설정을 변경하지 않고 읽기만 한다.
 - `run_arm64_packets.py`: 기존 B의 TUN packet peer를 재사용하는 native 진입점.
-  SACK, 부분 누적 ACK, DSACK, reneging을 독립적인 패킷 시나리오로 구성한다.
+  SACK, 부분 누적 ACK, DSACK, DSACK_OFO, reneging을 독립적인 패킷 시나리오로 구성한다.
   `smoke.c`의 PID 1 보호는 유지하며, native peer에는 reboot/mount 경로가 없다.
   native 진입점은 PID 1 또는 init과 같은 network namespace에서 실행을 거부한다.
+- `verify_arm64_trim_layout.py`: 각 빌드 설정으로 skb 필드 위치를 컴파일해
+  ARM64 `tcp_trim_head` probe 정의를 생성한다. 프로브 등록은 하지 않는다.
+  [C 리뷰 반영 및 관측 계약](../arm64-c-review.md)에 세부 변경과 증거를 기록했다.
 
 ## 고정 환경과 소스
 
@@ -60,13 +64,14 @@ TCP 검증의 결과를 구분해서 보존한다.
 | V0 기존 설정 재사용 점검 | PASS | 고정 HEAD, clean source, `.config`와 보존 설정 hash 일치 |
 | V1 설정·prepare | PASS | 고정 SHA, `5.4.214-rtx-v1`, 종료 코드 0 |
 | V0 전체 빌드 | PASS | `validation-davvdlkt`, make 종료 코드 0, 모듈 5,968개, DTB 264개 |
-| V1 전체 빌드 | RUNNING | `validation-gszehhr3`, 종료 코드와 산출물 확인 전 |
+| V1 전체 빌드 | PASS | `validation-gszehhr3`, make 종료 코드 0, 모듈 5,968개, DTB 264개 |
 | V0/V1 설치·실제 부팅 | NOT RUN | 기존 커널에서 작업 중, 별도 sudo·UTM 단계 필요 |
 | 기존 커널의 namespace 하네스 | PASS | `d-tcp-kspa5nnt`, 통신 16건, 커널 새 오류 0, cleanup 성공 |
-| 보조 도구·판정기 테스트 | PASS | 최상위 54개 + runtime 15개 + integration 2개 = 71개. 실제 커널 검증과 구분 |
+| 보조 도구·판정기 테스트 | PASS | C 리뷰 반영 후 최상위 66개 + runtime 15개 + integration 2개 = 83개 |
 | 기존 커널의 SACK 협상 | PASS | TCP_INFO 및 SACK-permitted 패킷 확인 |
 | 위 손실 실행의 SACK 블록 | NOT OBSERVED | 캡처 411개 중 SACK 블록 0개. 손실 설정만으로 경로 통과를 주장하지 않음 |
-| deterministic native packet peer | NOT RUN | 컴파일 및 판정기 테스트 완료, sudo 실행 결과 대기 |
+| deterministic native packet peer | PASS (기존 커널) | `d-packets-y9ch71ud`, 5건 PASS, 세 MIB 각각 +1, RACK 선행 재전송 처리 |
+| V0/V1 ARM64 trim 필드 위치 | PASS | 실제 빌드 설정에서 cb=40, seq/end_seq/segs=0/4/8, 크기=4/4/2 확인 |
 | 단일 GSO skb 내부 부분 ACK/trim 불변식 | NOT RUN | 추가 내부 관측 필요; 패킷 회계만으로 PASS 처리하지 않음 |
 | 성능 비교 | NOT RUN | V0/V1 실제 부팅 및 정확성 검증 이후 진행 |
 
@@ -80,6 +85,11 @@ TCP 관련 빌드 오류는 없었지만 전체 빌드를 무경고로 표시하
 
 V0 Image SHA-256: `0629ef40521e4ae34b873e2e8de173cd648d81328013efd2a019cf36e4aa7da5`.
 V0 vmlinux SHA-256: `a5f84523d79c7a3c81e22c76cac613f2d4ba3d1731027a11622e19be3ae565f6`.
+
+V1 전체 빌드는 15:23:23–15:55:54 KST, 약 32분 31초였다. 같은 6개 소스에서
+`-Wframe-larger-than` 경고가 있었으며 전체 빌드 종료 코드는 0이었다.
+V1 Image SHA-256: `b62a93362b8c4dd2dd70984b32ecf95a7f03c42eb08a787e363bd4bf120ebcb2`.
+V1 vmlinux SHA-256: `7202ff25dc9f7cbad2d2c69fe8d99502c8073d7324cc6514cf50ff1e34903650`.
 
 최초 namespace 실행 `d-tcp-6cy4rvwt`는 통신 16건과 cleanup은 성공했으나,
 tcpdump의 kernel packet buffer가 전달되기 전에 종료되어 저장 패킷이 0개였다.
@@ -155,14 +165,17 @@ guest QEMU 실행 검증을 이번 ARM64 실행으로 대체했다고 기록하�
 
 - native PARTIAL 시나리오는 MSS 1000, 전송 4000바이트, 누적 ACK 2000바이트,
   TCP_INFO의 unacked 2, 최종 큐 회계 해소와 payload 일치를 검사한다.
+  이 시나리오에서는 `tcp_early_retrans=0`으로 TLP를 비활성화한다.
   **단일 다중 세그먼트 skb, trim 진입, 잔여 skb seq/len/pcount는 별도 관측 전까지 미검증이다.**
 - 기존 B peer를 재사용해 Linux 5.4에서 이미 사용한 handshake/payload/FIN 처리를
   유지했다. packetdrill 신규 의존성과 중복 peer 구현을 추가하지 않았다.
   시험 도구 버전은 Git 커밋과 실행 디렉터리에 복사한 소스 hash로 고정한다.
 - GSO/TSO를 일괄 비활성화하지 않는다. ARM64 추적을 추가할 때 x86 `%si/%cx`
   fetch 인자를 복사하지 않고 빌드와 아키텍처의 인자/구조체 배치를 검증한다.
-- DSACK는 누적 ACK 아래의 중복 블록 및 TCPDSACKRecv 증가, reneging은 앞서 SACK한
-  구간을 철회한 뒤 해당 데이터의 재전송 및 TCPSACKReneging 증가로 확인한다.
+- DSACK는 누적 ACK 아래의 중복 블록과 데이터가 남은 DSACK_OFO 두 종류를 검사한다.
+  reneging은 먼저 도착한 offset<1000 재전송을 기록 후 건너뛰고 offset=1000 재전송과
+  sacked=0을 확인한다. TCPDSACKRecv/TCPDSACKOfoRecv/TCPSACKReneging 증가량은 각각 1이다.
+  DSACK_OFO 내부 순회 및 PARTIAL trim은 별도 관측 전까지 NOT RUN으로 남긴다.
 - ftrace는 진단용이다. 최종 성능은 STATS/DEBUG off와 실제 추적 비활성 상태를 확인한
   별도 실행으로 측정한다. 중첩 함수의 inclusive 시간을 단순 합산하지 않는다.
 - CPU time/byte는 성공적으로 수신한 application byte가 분모다. softirq 실행 CPU를
