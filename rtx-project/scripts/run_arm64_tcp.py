@@ -102,7 +102,9 @@ class Network:
         return child
 
     def start_capture(self):
-        self.capture = self.spawn(["ip", "netns", "exec", self.names[0], "tcpdump", "-n",
+        # -U flushes libpcap output, but does not disable the kernel's packet
+        # block timeout. Fast smoke cases can finish before the first block.
+        self.capture = self.spawn(["ip", "netns", "exec", self.names[0], "tcpdump", "-n", "--immediate-mode",
                                    "-Z", "root", "-i", self.links[0], "-s", "192", "-U", "-w",
                                    str(self.run / "traffic.pcap"), "tcp"], self.run / "tcpdump.log")
         deadline = time.monotonic() + 5
