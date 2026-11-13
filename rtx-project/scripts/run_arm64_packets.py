@@ -25,7 +25,7 @@ def netstat(text):
     for index, line in enumerate(lines[:-1]):
         if line.startswith("TcpExt:"):
             keys, values = line.split(), lines[index + 1].split()
-            if values[0] != "TcpExt:" or len(keys) != len(values):
+            if not values or values[0] != "TcpExt:" or len(keys) != len(values):
                 raise ValueError("malformed TcpExt counter table")
             return dict(zip(keys[1:], map(int, values[1:])))
     raise ValueError("missing TcpExt counters")
@@ -34,28 +34,44 @@ def netstat(text):
 def validate(log, before, after):
     if "FAIL" in log or "TIMEOUT" in log:
         raise ValueError("packet peer reported failure")
-    cases = ("SACK", "PARTIAL", "DSACK", "RENEGING")
+    cases = ("SACK", "PARTIAL", "DSACK", "DSACK_OFO", "RENEGING")
     for case in cases:
         if len(re.findall(r"^RTX_PACKET " + case + r" bytes=4000 retransmitted=\d+ PASS$", log, re.M)) != 1:
             raise ValueError("missing or duplicate packet result: " + case)
         if not re.search(r"^RTX_ACCOUNT " + case + r" drained=1 total_retrans=\d+$", log, re.M):
             raise ValueError("missing drained accounting: " + case)
-    if not re.search(r"^RTX_ACCOUNT SACK unacked=4 sacked=1$", log, re.M):
-        raise ValueError("SACK accounting not observed")
-    if "RTX_ACCOUNT PARTIAL acked_bytes=2000 unacked=2 sacked=0 lost=0" not in log:
+    for case in ("SACK", "RENEGING"):
+        if not re.search(r"^RTX_ACCOUNT " + case + r" unacked=4 sacked=1 lost=\d+ retrans=\d+$", log, re.M):
+            raise ValueError("SACK accounting not observed: " + case)
+    if not re.search(r"^RTX_ACCOUNT PARTIAL acked_bytes=2000 unacked=2 sacked=0 lost=0$", log, re.M):
         raise ValueError("partial ACK accounting not observed")
+    if not re.search(r"^RTX_CONFIG PARTIAL tcp_early_retrans=0$", log, re.M):
+        raise ValueError("PARTIAL must disable TLP")
+    if not re.search(r"^RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=\d+ retrans=\d+$", log, re.M):
+        raise ValueError("outstanding DSACK accounting not observed")
+    if not re.search(r"^RTX_ACCOUNT RENEGING recovered=1 unacked=3 sacked=0 lost=\d+ retrans=\d+ skipped=\d+$", log, re.M):
+        raise ValueError("reneging did not clear SACK accounting")
     if not re.search(r"^RTX_PACKET RENEGING bytes=4000 retransmitted=[1-9]\d* PASS$", log, re.M):
         raise ValueError("reneged data was not retransmitted")
     increments = {}
-    for name in ("TCPDSACKRecv", "TCPSACKReneging"):
+    for name in ("TCPDSACKRecv", "TCPDSACKOfoRecv", "TCPSACKReneging"):
         if name not in before or name not in after:
             raise ValueError("missing counter: " + name)
         increments[name] = after[name] - before[name]
-        if increments[name] < 1:
-            raise ValueError("path counter did not increase: " + name)
+        if increments[name] != 1:
+            raise ValueError("expected exactly one counter increment: " + name)
+    shift = {}
+    for name in ("TCPSackShifted", "TCPSackMerged", "TCPSackShiftFallback"):
+        if name not in before or name not in after:
+            raise ValueError("missing counter: " + name)
+        shift[name] = after[name] - before[name]
+        if shift[name] < 0:
+            raise ValueError("counter decreased: " + name)
     if log.count("RTX_NATIVE PACKETS_COMPLETE") != 1:
         raise ValueError("missing final peer completion")
     return dict(packet_cases={case: "PASS" for case in cases}, counter_deltas=increments,
+                shift_mib_deltas=shift,
+                dsack_walk="NOT RUN: outstanding DSACK and MIB evidence; internal walk observation still required",
                 partial_skb_trim="NOT RUN: packet accounting alone does not prove GSO skb/trim invariants")
 
 
