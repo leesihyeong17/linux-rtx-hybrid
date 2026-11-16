@@ -718,8 +718,29 @@ config DEFAULT_TCP_CONG
 	default "bbr" if DEFAULT_BBR
 	default "cubic"
 
+config TCP_RTX_CACHE
+	bool "TCP: cache retransmit tree endpoints"
+	default n
+	help
+	  Cache first and last retransmit tree skbs in both backends.
+	  Enable without TCP_RTX_TAIL to measure endpoint caching alone.
+	  This adds two skb pointers to each TCP socket. Initialization,
+	  replacement and removal maintain both cached endpoints.
+
+config TCP_RTX_TAIL
+	bool "TCP: direct retransmit tree tail insertion"
+	depends on TCP_RTX_CACHE
+	default n
+	help
+	  Skip tree position searches for ordered appends and promotion
+	  from the recent list. RB rebalancing is still performed.
+	  Arbitrary ordered insertion and TREE splits keep normal searches.
+	  The caller must supply a sequence after the current tree maximum.
+	  Leave disabled to retain the ordered-insertion comparison path.
+
 config TCP_RTX_HYBRID
 	bool "TCP: hybrid retransmit queue"
+	select TCP_RTX_CACHE
 	default n
 	help
 	  Keep the recent sequence suffix in a bounded list and promote

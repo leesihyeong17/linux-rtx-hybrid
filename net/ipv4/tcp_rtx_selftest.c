@@ -11,6 +11,7 @@
  * own inserts show up in /proc/rtx_stats, so reset that before measuring.
  */
 #include <linux/init.h>
+#include <linux/rbtree_augmented.h>
 #include <linux/slab.h>
 #include <linux/skbuff.h>
 #include <net/tcp.h>
@@ -329,6 +330,99 @@ static void st_hybrid_ordered(void)
 }
 #endif
 
+static int st_rb_height(struct rb_node *node, struct rb_node *parent, int depth)
+{
+	int left, right;
+
+	if (!node)
+		return 1;
+	if (depth > 32 || rb_parent(node) != parent)
+		return -1;
+	if (rb_is_red(node) &&
+	    (!parent || (node->rb_left && rb_is_red(node->rb_left)) ||
+	     (node->rb_right && rb_is_red(node->rb_right))))
+		return -1;
+	left = st_rb_height(node->rb_left, node, depth + 1);
+	right = st_rb_height(node->rb_right, node, depth + 1);
+	if (left < 0 || left != right)
+		return -1;
+	return left + rb_is_black(node);
+}
+
+#ifdef CONFIG_TCP_RTX_CACHE
+static void st_cached_endpoints(void)
+{
+	struct sock *sk = st_sock();
+	struct sk_buff *skb, *replacement;
+	struct tcp_sock *tp, *child;
+	unsigned int i, n = 128;
+	u32 base = 0xfffff000U;
+
+#ifdef CONFIG_TCP_RTX_HYBRID
+	n += CONFIG_TCP_RTX_RECENT_MAX;
+#endif
+	CHECK(sk, "cache socket allocation");
+	if (!sk)
+		return;
+	tp = tcp_sk(sk);
+	if (!st_fill(sk, base, n)) {
+		CHECK(0, "cache setup");
+		st_free(sk);
+		return;
+	}
+	CHECK(st_rb_height(sk->tcp_rtx_queue.rb_node, NULL, 0) > 0,
+	      "tail insertion RB balance");
+	for (i = 0; i < 2; i++) {
+		skb = i ? tp->rtx_tree_last : tp->rtx_tree_first;
+		replacement = st_skb(TCP_SKB_CB(skb)->seq,
+				     TCP_SKB_CB(skb)->end_seq);
+		CHECK(replacement, "endpoint replacement allocation");
+		if (!replacement)
+			break;
+		rtx_replace(sk, skb, replacement);
+		kfree_skb(skb);
+		CHECK((i ? tp->rtx_tree_last : tp->rtx_tree_first) ==
+		      replacement,
+		      "endpoint replacement cache");
+		CHECK(rtx_validate_structure(sk), "replacement structure");
+	}
+	skb = tp->rtx_tree_last;
+	tp->rtx_tree_last = NULL;
+	CHECK(!rtx_validate_structure(sk), "bad RB cache undetected");
+	tp->rtx_tree_last = skb;
+	rtx_unlink(sk, skb);
+	kfree_skb(skb);
+	CHECK(tp->rtx_tree_last == skb_rb_last(&sk->tcp_rtx_queue),
+	      "last removal cache");
+	skb = st_skb(base + n * SEG, base + (n + 1) * SEG);
+	CHECK(skb, "append after removal allocation");
+	if (skb)
+		rtx_append(sk, skb);
+	CHECK(rtx_validate_structure(sk), "append after removal");
+	child = kmemdup(tp, sizeof(*tp), GFP_KERNEL);
+	CHECK(child, "copied socket allocation");
+	if (child) {
+		rtx_init((struct sock *)child);
+		CHECK(!child->rtx_tree_first && !child->rtx_tree_last &&
+		      rtx_empty((struct sock *)child), "copied cache reset");
+		st_free((struct sock *)child);
+	}
+	while ((skb = rtx_first(sk))) {
+		rtx_unlink(sk, skb);
+		kfree_skb(skb);
+		CHECK(rtx_validate_structure(sk), "cache while draining");
+		CHECK(st_rb_height(sk->tcp_rtx_queue.rb_node, NULL, 0) > 0,
+		      "RB balance while draining");
+	}
+	CHECK(!tp->rtx_tree_first && !tp->rtx_tree_last, "empty caches");
+	CHECK(st_fill(sk, 1000, 1), "empty reappend");
+	CHECK(rtx_first(sk) == rtx_last(sk), "singleton after draining");
+	CHECK(rtx_validate_structure(sk), "reappend structure");
+	st_free(sk);
+	pr_info("rtx_selftest: cached endpoints/tail balance/replace/clone/drain executed\n");
+}
+#endif
+
 static int __init rtx_selftest_init(void)
 {
 	st_split_positions(1000);
@@ -337,6 +431,10 @@ static int __init rtx_selftest_init(void)
 	/* the first skb itself crosses the wrap */
 	st_split_positions(0xffffffe0);
 	st_split_single();
+	CHECK(st_rb_height(NULL, NULL, 0) == 1, "empty black height");
+#ifdef CONFIG_TCP_RTX_CACHE
+	st_cached_endpoints();
+#endif
 #ifdef CONFIG_TCP_RTX_HYBRID
 	st_hybrid();
 	st_hybrid_ordered();

@@ -9,7 +9,7 @@ mkdir -p /work/src /work/root/dev
 tar -xf /evidence/source.tar -C /work/src
 cd /work/src
 patch -p1 < /evidence/source.patch > /evidence/patch.log
-for mode in rb-off rb-on hybrid-off hybrid-on; do
+for mode in rb-off rb-on rb-cache-on rb-tail-off rb-tail-on hybrid-off hybrid-on; do
     out=/work/$mode
     mkdir -p "$out" /evidence/"$mode"
     make O="$out" ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- x86_64_defconfig > /evidence/"$mode"/config.log 2>&1
@@ -18,6 +18,12 @@ for mode in rb-off rb-on hybrid-off hybrid-on; do
         scripts/config --file "$out/.config" -e TCP_RTX_HYBRID --set-val TCP_RTX_RECENT_MAX 16
     else
         scripts/config --file "$out/.config" -d TCP_RTX_HYBRID
+    fi
+    if [[ $mode == rb-cache-* || $mode == rb-tail-* || $mode == hybrid-* ]]; then
+        scripts/config --file "$out/.config" -e TCP_RTX_CACHE
+    fi
+    if [[ $mode == rb-tail-* || $mode == hybrid-* ]]; then
+        scripts/config --file "$out/.config" -e TCP_RTX_TAIL
     fi
     if [[ $mode == *-on ]]; then
         scripts/config --file "$out/.config" -e TCP_RTX_DEBUG -e TCP_RTX_STATS
@@ -62,6 +68,12 @@ cp /work/hybrid-on/arch/x86/boot/bzImage /evidence/bzImage-k1
 boot /evidence/bzImage-k1 /evidence/serial-k1.log
 python3 /evidence/harness/check_results.py /evidence/serial-k1.log /evidence/cases.json > /evidence/summary-k1.json
 python3 /evidence/check_packet_trace.py /evidence/serial-k1.log > /evidence/trace-k1.txt
+cd /work/src
+make O=/work/rb-tail-on ARCH=x86_64 CROSS_COMPILE=x86_64-linux-gnu- -j4 bzImage > /evidence/rb-tail-build.log 2>&1
+cp /work/rb-tail-on/arch/x86/boot/bzImage /evidence/bzImage-rb-tail
+boot /evidence/bzImage-rb-tail /evidence/serial-rb-tail.log
+python3 /evidence/harness/check_results.py /evidence/serial-rb-tail.log /evidence/cases.json > /evidence/summary-rb-tail.json
+python3 /evidence/check_packet_trace.py /evidence/serial-rb-tail.log > /evidence/trace-rb-tail.txt
 cd /evidence
 sha256sum bzImage-* initramfs.cpio source.tar source.patch serial*.log harness/* > SHA256SUMS
 printf 'PASS\n' > result.txt
