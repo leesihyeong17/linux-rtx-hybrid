@@ -1,7 +1,8 @@
 # #16 B 최소 벤치마크와 공통 tail 최적화
 
 - 이슈: [#16 B·D 성능 비교](https://github.com/leesihyeong17/linux-rtx-hybrid/issues/16)
-- PR: 생성 후 연결
+- PR: [#25](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/25)
+- 구현 커밋: Core `00d5aafd6`, 벤치마크·계약 `852d1486a`
 - 브랜치: `feat/b-rtx-benchmark-tail`
 - 기준: `0ee4a1a716d5f5f5f4ea89e5eae948c5dd30fa49`, 선행 [PR #20](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/20)
 - 대상: 선행 PR이 열려 있는 동안 `test/b-sack-boundary-regression`에 쌓는 후속 PR. 선행 PR 병합 후 main 기준으로 재검토한다.
@@ -88,7 +89,7 @@ python3 -B -m unittest discover -s rtx-project/tests/runtime -p 'test_*.py' -v
 | `issue16-final-checks/report/regression.png` | 실제 Core/B 회귀 raw 행·hash HTML 캡처 |
 | `hybrid-IL5kS4bP/` | 첫 이미지 조회 실패와 정리 기록 |
 
-검증 소스는 기준 SHA의 archive + `source.patch` + harness 사본이다. 최종 Core C/H·Kconfig, 벤치마크 C/H와 빌드 스크립트가 실행 입력과 일치하는지 확인한다. 첫 실행 뒤 collector에 variant label 검증·scope containment·환경 필드 전달을 보강했다. 커널 코드는 그대로이며 최종 collector로 원시 20개를 별도 복사본에 다시 검증했다. 최종 overlay 생성 결과도 실제 빌드 patch/hash와 비교했다. 후속 renderer와 단위 테스트의 추가는 커널 입력을 바꾸지 않는다.
+검증 소스는 기준 SHA의 archive + `source.patch` + harness 사본이다. 최종 Core C/H·Kconfig, 벤치마크 C/H와 빌드 스크립트가 실행 입력과 일치하는지 확인한다. 첫 실행 뒤 collector에 variant label 검증·scope containment·환경 필드 전달을 보강했다. 커널 코드는 그대로이며 최종 collector로 원시 20개를 별도 복사본에 다시 검증했다. 최종 overlay 생성 결과도 실제 빌드 patch/hash와 비교했다. PR #25는 생성 시 충돌 없음으로 확인했고, 원격 Actions workflow와 head check는 등록되지 않아 원격 CI 통과로 표현하지 않는다. 후속 renderer와 단위 테스트의 추가는 커널 입력을 바꾸지 않는다.
 
 스크린샷은 QEMU 콘솔 자체가 아니라 원본 로그를 행 번호·hash와 함께 렌더링한 화면이다. 임시 서버는 캡처 후 종료했다. Docker 실행의 `remaining-containers.txt`는 모두 비어 있고 작업 컨테이너를 제거했다. 기존 자원은 보존했다.
 
