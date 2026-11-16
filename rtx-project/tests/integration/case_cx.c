@@ -123,6 +123,127 @@ out:
 }
 
 /*
+ * retransmit_skb_hint on an skb that is then merged and then removed.
+ * After skb 0 is ACKed: skb 2 (TREE last) SACKed, skb 1 and skb 3 (LIST
+ * first) lost. The real retransmit loop resends skb 1 (2+2, no hole left
+ * behind). A second pass with the route failing stops at skb 3, leaving
+ * the hint there. A SACK for skb 3 merges it into skb 2: the hint must
+ * move to skb 2. The cumulative ACK that removes skb 2 must drop it (the
+ * next retransmit pass may set it again, to the new head). RACK and
+ * dupthresh marking are off.
+ */
+static void c_rexmit_hint_merge(u32 base)
+{
+	struct socket *sock = c_socket(base, C_QUIET);
+	unsigned int n = c_k() + 3;
+	struct sk_buff *s2, *s3;
+	struct c_count cnt;
+	struct tcp_sock *tp;
+	struct sock *sk;
+
+	if (!sock)
+		return;
+	sk = sock->sk;
+	tp = tcp_sk(sk);
+	if (!c_fill(sk, n))
+		goto out;
+	B_EXPECT(c_ack(sk, c_seq(1), 1, c_seq(2), c_seq(3)) == 1);
+	s2 = rtx_find_cover(sk, c_seq(2));
+	s3 = rtx_find_cover(sk, c_seq(3));
+	tcp_mark_skb_lost(sk, rtx_first(sk));
+	tcp_mark_skb_lost(sk, s3);
+	c_test_enter_recovery(sk);
+	tp->snd_cwnd = tcp_packets_in_flight(tp) + 4;
+	tcp_xmit_retransmit_queue(sk);
+	B_EXPECT(tp->retrans_out == 4 && tp->lost_out == 8 && c_xmits == 2);
+	c_block_xmit = true;
+	tp->snd_cwnd = 256;
+	tcp_xmit_retransmit_queue(sk);
+	B_EXPECT(tp->retrans_out == 4 && c_xmits == 2);
+	B_EXPECT(s3 && tp->retransmit_skb_hint == s3);
+	c_check(sk, "rhint-A-stopped");
+	if (!s2 || !s3)
+		goto out;
+
+	c_count(&cnt);
+	B_EXPECT(c_ack(sk, c_seq(1), 1, c_seq(2), c_seq(4)) == 1);
+	c_expect_shift(&cnt, 0, 1);
+	B_EXPECT(tp->retransmit_skb_hint == s2);
+	B_EXPECT(TCP_SKB_CB(s2)->end_seq == c_seq(4) && tp->sacked_out == 8 &&
+		 tp->lost_out == 4);
+	c_check(sk, "rhint-B-merged");
+
+	c_block_xmit = false;
+	B_EXPECT(c_ack(sk, c_seq(2), 1, c_seq(2) + 1000, c_seq(4)) == 1);
+	B_EXPECT(tp->retransmit_skb_hint == s2 && !tp->retrans_out);
+	c_check(sk, "rhint-C-head-acked");
+	B_EXPECT(c_ack(sk, c_seq(4), 0) == 1);
+	B_EXPECT(!tp->retransmit_skb_hint ||
+		 tp->retransmit_skb_hint == rtx_first(sk));
+	c_check(sk, "rhint-D-hint-removed");
+	B_EXPECT(c_ack(sk, tp->snd_nxt, 0) == 1);
+	B_EXPECT(rtx_empty(sk) && !sk->sk_wmem_queued);
+	c_check(sk, "rhint-E-all");
+	pr_info("BVERIFY cx rexmit-hint-merge k=%u base=%u\n", c_k(), base);
+out:
+	c_release(sock);
+}
+
+/*
+ * In-window (out-of-order) DSACK: the first SACK block lies inside the
+ * second. Step B reports both copies of the retransmitted half of skb 3
+ * (LIST first); step C reports a duplicate that crosses from skb 2 (TREE
+ * last) into skb 3 while skb 2 is SACKed for the first time.
+ */
+static void c_ofo_dsack(u32 base)
+{
+	struct socket *sock = c_socket(base, C_NOLOSS);
+	unsigned int n = c_k() + 3;
+	struct c_count a, b;
+	struct sk_buff *skb;
+	struct tcp_sock *tp;
+	struct sock *sk;
+	int undo;
+
+	if (!sock)
+		return;
+	sk = sock->sk;
+	tp = tcp_sk(sk);
+	if (!c_fill(sk, n))
+		goto out;
+	skb = rtx_find_cover(sk, c_seq(3));
+	tcp_mark_skb_lost(sk, skb);
+	c_test_enter_recovery(sk);
+	tp->snd_cwnd = tcp_packets_in_flight(tp) + 2;
+	tcp_xmit_retransmit_queue(sk);
+	B_EXPECT(tp->retrans_out == 2 && b_prepare_count == 1);
+	c_check(sk, "ofo-A-retrans");
+
+	undo = tp->undo_retrans;
+	c_count(&a);
+	B_EXPECT(c_ack(sk, c_base, 2, c_seq(3), c_seq(3) + 2000, c_seq(3),
+		       c_seq(4)) == 1);
+	c_count(&b);
+	B_EXPECT(b.dsack - a.dsack == 1);
+	B_EXPECT(tp->undo_retrans < undo);
+	B_EXPECT(!tp->retrans_out && !tp->lost_out && tp->sacked_out == 4);
+	c_check(sk, "ofo-B-dsack-retrans");
+
+	c_count(&a);
+	B_EXPECT(c_ack(sk, c_base, 2, c_seq(2) + 3000, c_seq(3) + 1000,
+		       c_seq(2), c_seq(4)) == 1);
+	c_count(&b);
+	B_EXPECT(b.dsack - a.dsack == 1 && tp->sacked_out == 8);
+	c_check(sk, "ofo-C-dsack-boundary");
+	B_EXPECT(c_ack(sk, tp->snd_nxt, 0) == 1);
+	B_EXPECT(rtx_empty(sk) && !sk->sk_wmem_queued);
+	c_check(sk, "ofo-D-all");
+	pr_info("BVERIFY cx ofo-dsack k=%u base=%u\n", c_k(), base);
+out:
+	c_release(sock);
+}
+
+/*
  * RACK: skbs sent 1 ms apart; SACKing the last one with sacked_out >=
  * reordering gives a zero reordering window, so every earlier skb is
  * marked lost by time, not by dupthresh.
@@ -296,6 +417,9 @@ static void c_x_all(void)
 	c_rexmit_split(1000, 3);
 	if (n - 1 != 3)
 		c_rexmit_split(1000, n - 1);
+	c_rexmit_hint_merge(1000);
+	c_rexmit_hint_merge((u32)-11000);
+	c_ofo_dsack(1000);
 	c_rack_loss(1000);
 	c_rack_timer(1000);
 	c_tlp(1000);
@@ -310,6 +434,7 @@ static void c_x_all(void)
 	c_shift_pair(1000, 2);
 	c_lost_hint_merge(1000);
 	c_rto(1000);
+	c_ofo_dsack(1000);
 	c_family = AF_INET;
 }
 

@@ -19,6 +19,7 @@ enum c_mode {
 	C_NOLOSS,	/* RACK on, reordering 127: no loss marking */
 	C_CLASSIC,	/* RACK off, reordering 3: tcp_mark_head_lost */
 	C_RACK,		/* RACK on, reordering 3: time-based loss */
+	C_QUIET,	/* RACK off, reordering 127: no automatic marking */
 };
 
 static unsigned int c_xmits, c_shape;
@@ -147,9 +148,10 @@ static struct socket *c_socket(u32 base, enum c_mode mode)
 	sk->sk_gso_max_size = GSO_MAX_SIZE;
 	tp->snd_una = tp->snd_nxt = tp->write_seq = base;
 	tp->snd_wl1 = 0;
-	tp->reordering = mode == C_NOLOSS ? 127 : 3;
+	tp->reordering = mode == C_NOLOSS || mode == C_QUIET ? 127 : 3;
 	c_saved_recovery = init_net.ipv4.sysctl_tcp_recovery;
-	init_net.ipv4.sysctl_tcp_recovery = mode == C_CLASSIC ? 0 :
+	init_net.ipv4.sysctl_tcp_recovery =
+		mode == C_CLASSIC || mode == C_QUIET ? 0 :
 		TCP_RACK_LOSS_DETECTION;
 	inet_sk_state_store(sk, TCP_ESTABLISHED);
 	tcp_init_congestion_control(sk);
