@@ -41,7 +41,7 @@ PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/21. 브랜치 `c/stat
 
 `st_find_cover_sweep(base)`를 base 3가지로 부른다: 1000, 큐 안에서 wrap(`0xfffffd00`), 첫 skb가 wrap을 가로지름(`0xffffffe0`).
 
-- skb 12개, 길이 40/60/80/100 반복, 세 개마다 30바이트 구멍. K=4이면 TREE 8개 + LIST 4개.
+- skb 수: RB 12개, HYBRID clamp(K+4, 12, 64)개(A 리뷰 반영. K=1·4는 12개, K=16은 20개라 K≤60이면 TREE가 비지 않는다. K≥61로 TREE가 비면 그 사실을 로그로 남긴다). 길이 40/60/80/100 반복, 세 개마다 30바이트 구멍.
 - 3단계로 확인한다: 전체 큐 → 앞 2개 ACK 제거 → (하이브리드) TREE 마지막 노드 제거. 각 단계에서 첫 seq−3부터 끝 end_seq+3까지 모든 seq에 대해 `__rtx_find_cover()`와 단순 순회(`st_cover_ref`)를 비교한다.
 - 음성 대조: 한 칸 어긋난 기준(`seq+1`)과는 반드시 어딘가에서 달라야 한다. 비교기가 항상 "같다"고만 하지 않는지 확인하는 장치다.
 - 방문 노드 수(평균·최대)를 로그로 남긴다. 큐가 12개뿐이므로 성능 근거가 아니다.
@@ -72,7 +72,7 @@ PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/21. 브랜치 `c/stat
 | 기계어 비교 (`objdump -d`, 주소 정규화) | `rtx_defconfig`, STATS·DEBUG off. RB / HYBRID 각각 | `tcp_input.o`·`tcp_output.o`·`tcp.o` 모두 main과 **동일** |
 | 부팅 커널 빌드 | x86_64_defconfig + STATS·DEBUG·KPROBES. RB / HYBRID(K=4) | 둘 다 성공. `net/ipv4`·`include/net` 경고 0 (gcc 13 + 5.4 커널의 기존 경고만 있음) |
 | 자체 테스트 | RB / HYBRID K=4 | **556 passed, 0 failed** / **689 passed, 0 failed** |
-| sweep | base 3종 × 2608 조회 | 불일치 0, 음성 대조 차이 44 (3종 모두). 방문 노드 RB 평균 2.97·최대 5, HYB 평균 2.59·최대 4 |
+| sweep | base 3종 | 불일치 0 (3종 모두). 조회 수·음성 대조 차이·방문 노드 평균/최대: RB 2608·44·2.97/5, HYB K=4 2608·44·2.59/4, K=1 2608·44·2.65/5, K=16 4558·76·7.72/16 (K=1·16·RB 값은 A 리뷰 반영 후 #15 후속 KASAN 실행) |
 | 실제 패킷 시나리오 5종 | RB / HYBRID | 모두 exit 0, `WARNING`·`BUG`·`Oops` 0 |
 | shift 카운터 = MIB | 5종 × 3쌍 × 2커널 = 30쌍 | **30/30 일치** |
 
