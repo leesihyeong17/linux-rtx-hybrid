@@ -346,7 +346,12 @@ static struct sk_buff *st_cover_ref(struct sock *sk, u32 seq)
  * hole after every third skb, so each boundary kind (start, end-1, end,
  * hole, TREE/LIST edge) is hit. Also report visited nodes per lookup.
  */
+#ifdef CONFIG_TCP_RTX_HYBRID
+/* Keep the TREE non-empty (TREE/LIST edge covered) for K up to 60. */
+#define ST_SWEEP_N	clamp_t(int, CONFIG_TCP_RTX_RECENT_MAX + 4, 12, 64)
+#else
 #define ST_SWEEP_N	12
+#endif
 static void st_find_cover_sweep(u32 base, const char *what)
 {
 	struct sock *sk = st_sock();
@@ -373,6 +378,11 @@ static void st_find_cover_sweep(u32 base, const char *what)
 		seq += len + ((i % 3) == 2 ? 30 : 0);
 	}
 	CHECK(rtx_validate_structure(sk), "sweep structure");
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (!tcp_sk(sk)->rtx_tree_first)
+		pr_info("rtx_selftest: sweep %s: TREE empty (K >= %d), TREE/LIST edge not covered\n",
+			what, ST_SWEEP_N);
+#endif
 	/* round 0: full queue; 1: two head skbs ACKed; 2: TREE last removed */
 	for (round = 0; round < 3; round++) {
 		if (round == 1) {
