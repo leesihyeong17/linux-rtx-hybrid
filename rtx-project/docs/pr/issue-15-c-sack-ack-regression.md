@@ -18,7 +18,9 @@ B는 #20에서 SACK 분할 경로를 검증했지만, 선형 skb fixture라 shif
 5. 실제 경로 도달을 계측으로 보이고, K=16·K=1 결과, 음성 대조, 원본 로그, 남은 미검증 범위를 남긴다. 결함이 나오면 재현 테스트와 최소 수정을 남긴다.
 
 포함: `rtx-project/tests/integration/`의 C fixture·검사기와 overlay 확장. production 코드(`net/ipv4/`, `include/net/`)는 바꾸지 않는다.
-제외: 송신·재전송 재진입 의미 판정(B와 공동으로 확인 예정), 성능, IPv6, 다중 CPU·타이머 경합, ARM64·gcc 9.4.
+제외: 송신·재전송 재진입의 split 의미 판정(B 기준으로 공동 확인), 성능, 다중 CPU 경합, 실제 NIC, ARM64·gcc 9.4.
+
+2차(같은 날)에서 1차의 미검증 경로를 추가했다: `lost_skb_hint` 병합, 재전송 재분할, RACK 시간 기반 손실, RACK reorder·TLP·RTO 타이머 핸들러, IPv6 소켓, 2 CPU 부팅.
 
 ## 2. 최종 변경
 
@@ -28,7 +30,8 @@ B는 #20에서 SACK 분할 경로를 검증했지만, 선형 skb fixture라 shif
 | `case_cshift.c` (신규) | 항목 1. 경계 partial→full(`c_shift_boundary`), 현재+다음 동시 병합 뒤 순회 계속(`c_shift_pair`, cur=1~4) |
 | `case_cack.c` (신규) | 항목 2~4. 부분·누적 ACK(`cleanup`), 손실 표시·재전송·DSACK(`recovery`), 재정렬(`reorder`), 두 번째 split 실패 뒤 ACK(`split_failure`), 오라클 음성 대조(`negative`) |
 | `c_diff_states.py`, `test_c_diff_states.py` (신규) | 하이브리드 로그와 RB 참조 로그의 `CSTATE` 비교와 그 단위 테스트(불일치·누락 거부 포함) |
-| `apply_overlay.py` | `case_c*`가 있으면 `c_common.h`를 함께 복사하고, `tcp_input.c`에 `c_test_ack()` wrapper를 붙인다 (`tcp_mstamp_refresh` 뒤 `tcp_ack(sk, skb, FLAG_SLOWPATH)`) |
+| `case_cx.c` (신규, 2차) | lost 힌트 병합(`c_lost_hint_merge`), 재전송 재분할(`c_rexmit_split`: TREE 끝·LIST 첫·LIST 끝), RACK 시간 기반 손실(`c_rack_loss`), RACK reorder 타이머(`c_rack_timer`), TLP(`c_tlp`), RTO(`c_rto`), 그리고 주요 시나리오 6개를 IPv6 소켓으로 반복 |
+| `apply_overlay.py` | `case_c*`가 있으면 `c_common.h`를 함께 복사하고, `tcp_input.c`에 `c_test_ack()`(`tcp_mstamp_refresh` 뒤 `tcp_ack(sk, skb, FLAG_SLOWPATH)`)와 `c_test_enter_recovery()`(`tcp_enter_recovery`) wrapper를 붙인다 |
 
 fixture 소켓은 B의 `b_socket()`으로 만든다. 그 위에 연결된 소켓이 갖는 최소 상태를 채운다.
 
@@ -61,14 +64,15 @@ RB 커널은 같은 시나리오를 k16·k1 두 모양으로 모두 실행한다
 
 | 실행 | 결과 |
 | --- | --- |
-| HYBRID K=16 | fixture 9개 case 2142 checks, 실패 0 (C: cack 548, cshift 686). KASAN 0, WARNING 0. selftest 749/0. `RTX_RUNTIME PASS` |
-| HYBRID K=1 | 1459 checks, 실패 0 (cack 368, cshift 348). KASAN 0. selftest 674/0 |
-| RB (k16·k1 모양 모두) | 2674 checks, 실패 0 (cack 888, cshift 988). KASAN 0. selftest 556/0 |
-| RB 대조 (`c_diff_states.py`) | k16 63단계, k1 55단계 TCP 상태 **차이 0** |
+| HYBRID K=16 | fixture 10개 case 3394 checks, 실패 0 (C: cack 548, cshift 686, cx 1252). KASAN 0, WARNING 0. selftest 749/0. `RTX_RUNTIME PASS` |
+| HYBRID K=16, 2 CPU | 같은 커널을 `-smp 2`로 부팅. 3394 checks 실패 0, KASAN 0, `RTX_RUNTIME PASS`, RB와 차이 0 |
+| HYBRID K=1 | 2185 checks, 실패 0 (cack 368, cshift 348, cx 726). KASAN 0. selftest 674/0 |
+| RB (k16·k1 모양 모두) | 4627 checks, 실패 0 (cack 888, cshift 988, cx 1953). KASAN 0. selftest 556/0 |
+| RB 대조 (`c_diff_states.py`) | k16 121단계, k1 110단계 TCP 상태 **차이 0** (IPv6 단계 포함) |
 | 음성 대조 1: 오라클 | `lost_cnt_hint`+1, `highest_sack` 한 칸 이동, hint 앞 LOST skb, payload 1바이트 반전을 모두 거부 (`CHINT`/`B_EXPECT` 4건) |
-| 음성 대조 2: 변이 커널 | hole-fill에서 `rtx_next(sk, prev)` → `rtx_next(sk, skb)`(이미 해제된 skb). KASAN `use-after-free in tcp_sacktag_walk` 1건, `tcp_rtx.h:190` DEBUG WARNING, fixture 실패 24건으로 거부 |
+| 음성 대조 2: 변이 커널 | hole-fill에서 `rtx_next(sk, prev)` → `rtx_next(sk, skb)`(이미 해제된 skb). KASAN `use-after-free in tcp_sacktag_walk`, fixture 실패 42건(1차 24건)으로 거부 |
 | 음성 대조 3: 대조기 | `test_c_diff_states.py` 5개(상태 차이·단계 누락·빈 로그 거부) 통과 |
-| 개발 실행 (K=4, KASAN 없음) | 1698 checks, 실패 0 |
+| 개발 실행 (K=4, KASAN 없음) | 1차 1698, 2차 2566 checks, 실패 0 |
 | 정적 검사 | `git diff --check` 통과. 새 C 파일 checkpatch 0/0 |
 
 ### 4.1 항목별 실행 내용
@@ -115,28 +119,53 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
 - 두 번째 split이 실패해도 첫 split은 유지된다.
 - SACKed skb가 tsorted에서 빠지는 것은 정상 상태다.
 
-### 4.2 관찰 (하이브리드 결함 아님, RB와 동일)
+### 4.2 2차에서 추가한 경로 (`case_cx`)
+
+- **lost 힌트 병합** (`CLASSIC`, 재전송 차단):
+  1. skb 1·3을 SACK하면 dupthresh로 Recovery에 들어가고, `tcp_mark_head_lost()`가 `lost_skb_hint`=skb 3, `lost_cnt_hint`=4로 둔다.
+  2. skb 2를 채우는 SACK 한 번으로 skb 2와 skb 3(힌트)이 skb 1에 병합된다(merge 2).
+  3. 힌트는 skb 1로 옮겨 가고 `lost_cnt_hint`는 0이 된다. n=K+3이면 skb 2는 TREE 끝, skb 3은 LIST 첫 노드다.
+- **재전송 재분할** (B와 공동 확인용):
+  1. `tcp_mark_skb_lost` → `tcp_enter_recovery` → cwnd를 두 세그먼트만 남긴 뒤 실제 `tcp_xmit_retransmit_queue`를 돌린다. 4세그먼트 skb가 2+2로 다시 split되고 앞 조각만 재전송된다.
+  2. 확인 결과: prepare/commit 1, retrans_out 2, `retransmit_skb_hint`=뒤 조각.
+  3. 대상은 TREE 끝(idx 2), LIST 첫(idx 3), LIST 끝(n−1). 이후 SACK·누적 ACK에서 회계가 0으로 정리된다.
+- **RACK 시간 기반 손실**: 송신 시각을 1 ms 간격으로 두고 마지막 skb를 SACK한다(sacked_out ≥ reordering이라 reorder 창 0). 앞의 모든 skb가 시간 기준으로 lost가 된다(lost_out = 4(n−1)).
+- **RACK reorder 타이머**:
+  1. 같은 송신 시각에서는 표시 없이 `ICSK_TIME_REO_TIMEOUT`이 걸린다.
+  2. `tcp_mstamp`를 만료 시각(+10 s)으로 옮겨 `tcp_rack_reo_timeout()`을 실행하면, 구멍이 lost가 되고 Recovery 진입과 재전송까지 일어난다.
+- **TLP**:
+  1. `tcp_send_loss_probe()`가 LIST 끝 skb를 3+1로 split하고 마지막 세그먼트를 재전송한다(TCPLossProbes +1, `tlp_high_seq`=snd_nxt).
+  2. 그 구간 DSACK이 있는 전체 ACK에서 `tlp_high_seq`가 0이 된다.
+- **RTO**: SACK 2블록(그중 LIST 머리 split 2회) 뒤 `tcp_retransmit_timer()`를 실행하면:
+  - Loss 상태가 되고 TCPTimeouts +1이다.
+  - lost_out = packets_out − sacked_out이다.
+  - TREE 첫 skb가 1 세그먼트로 다시 split되어 재전송된다.
+  - 이후 부분·전체 ACK가 정상이다.
+- **IPv6**: cleanup·recovery·boundary·pair(cur=2)·lost 힌트 병합·RTO를 `AF_INET6` 소켓으로 반복했다(`CSTATE ... v6-` 태그). RB 대조에 포함된다.
+- 타이머는 timer wheel이 아니라 핸들러 본문을 직접 실행했다. 소켓은 fixture가 소유(lock_sock)한 상태라 실제 타이머가 `tcp_release_cb`로 미뤄 실행하는 경우와 같은 문맥이다.
+
+### 4.3 관찰 (하이브리드 결함 아님, RB와 동일)
 
 1. 같은 DSACK을 두 번 받으면 `undo_retrans`가 두 번 줄고(4→3) `delivered`도 두 번 늘었다. mainline `tcp_check_dsack()`은 어떤 구간을 이미 DSACK으로 셌는지 기억하지 않는다. RB 참조와 상태가 같아 hybrid 문제는 아니다. 정상 수신자는 같은 DSACK을 반복하지 않는다.
 2. HYBRID K=16의 find_cover는 LIST 구간에서 최대 16노드를 선형 탐색한다(sweep 평균 7.72, RB 2.97). #16 측정에서 참고할 값이다.
 
 ## 5. 증거
 
-로컬 전용(git 무시). 위치는 `rtx-project/.work/c15-20261116-1506/`(C 작업 환경)이다. PR에는 캡처 4장을 첨부할 예정이다.
+로컬 전용(git 무시). 최종 실행은 `rtx-project/.work/c15b-20261116-1531/`, 1차 실행은 `c15-20261116-1506/`(C 작업 환경)이다. PR에는 아래 캡처를 첨부한다.
 
 | 주장 | 파일 |
 | --- | --- |
-| K=16·K=1·RB 실행 원본 | `serial-hyb16.log`, `serial-hyb1.log`, `serial-rb.log` |
+| K=16·K=1·RB·2 CPU 실행 원본 | `serial-hyb16.log`, `serial-hyb1.log`, `serial-rb.log`, `serial-hyb16-smp2.log` |
 | case별 판정 | `summary-*.json`(B의 `check_results.py`), `kasan-*.txt` |
-| RB 대조 | `diff-k16.json`, `diff-k1.json` |
+| RB 대조 | `diff-k16.json`, `diff-k1.json`, `diff-k16-smp2.json` |
 | 변이 음성 대조 | `mutant.patch`, `serial-mutant.log`, `kasan-mutant.txt` |
-| 실행 화면(원본 로그 기반 보고서, 행 번호·sha256 표시, 콘솔 캡처 아님) | `report/hyb16.png`, `report/hyb1.png`, `report/rb.png`, `report/mutant.png` |
-| 실행한 harness·overlay | `harness/`, `instrumentation.patch`, `source-sha.txt`(`6c98193d1`), `source.patch` |
+| 실행 화면(원본 로그 기반 보고서, 행 번호·sha256 표시, 콘솔 캡처 아님) | `report/hyb16.png`, `report/hyb1.png`, `report/rb.png`, `report/hyb16-smp2.png`, `report/mutant.png` |
+| 실행한 harness·overlay | `harness/`(`harness-sha.txt` = `950bb902d`, 미커밋 변경 없음), `instrumentation.patch`, production 기준 `source-sha.txt` |
 | 설정·빌드·커널 | `*.config`, `build-*.log`, `bzImage-*`, `initramfs.cpio`, `environment.txt` |
 | 개발 중 실패 재현 | `dev-failures/` |
 | 체크섬 | `SHA256SUMS` |
 
-실행한 harness와 이 PR 파일은 `c_common.h` 20행 주석 한 줄만 다르다(checkpatch 80열 정리). 실행 코드는 같다.
+최종 실행의 harness는 이 PR의 `950bb902d` 파일과 같다(1차 실행은 `c_common.h` 주석 한 줄만 달랐다).
 
 ## 6. 실패와 수정
 
@@ -153,13 +182,11 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
 
 ## 7. 남은 작업
 
-- **B와 공동 확인**: 재전송 재진입(`__tcp_retransmit_skb` 안의 `tcp_fragment`)이 이번 recovery에서 실제로 돌았다(머리 `0+2000` 조각). 회계는 RB와 같았다. split 의미 판정은 B 기준으로 함께 보기로 했다.
-- 일부러 겨냥하지 않은 경로:
-  - `tcp_shifted_skb`에서 병합 대상이 `lost_skb_hint`인 경우
+- **B와 공동 확인**: 재전송 재분할(TREE 끝·LIST 첫·LIST 끝, recovery·RTO·TLP)은 실행했고, 회계·힌트·구조는 RB와 같았다. B 쪽 split 의미(PSH/FIN 이동, payload, tsorted 위치) 기준을 이 시나리오에 적용할지 B와 정한다.
+- 아직 겨냥하지 않은 경로:
   - `retransmit_skb_hint`가 병합·삭제되는 경우
   - OFO DSACK
-  - RACK 시간 기반 손실(`C_NOLOSS`는 모든 skb의 송신 시각이 같다)
-  - TLP·RTO 타이머 발화
-- 환경 확대: gcc 9.4·ARM64(D), 다중 CPU, IPv6, 실제 NIC는 미실행이다.
+  - 실제 timer wheel 발화와 경합(이번에는 핸들러 본문만 실행)
+- 환경 확대: gcc 9.4·ARM64(D), 실제 다중 CPU 경합(2 CPU 부팅은 했지만 fixture는 한 CPU에서 순차 실행), 실제 NIC는 미실행이다. IPv6는 fixture 수준만 했고 패킷 시험은 하지 않았다.
 - #20 머지 뒤 이 PR의 base를 main으로 바꾼다. #21(카운터 연결)은 11/16 머지됐다. #20 머지 뒤 main 기준으로 같은 실행을 한 번 더 확인한다.
 - #15 매트릭스에서 C 담당 행은 위 미검증을 빼고 채웠다. 이슈 종료는 B·A와 합의해 판단한다.
