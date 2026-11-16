@@ -38,7 +38,12 @@ static void b_case_invariants(void)
 	B_EXPECT(!b_valid(sock->sk));
 	tp->lost_skb_hint = skb;
 	list_del_init(&back->tcp_tsorted_anchor);
+	B_EXPECT(b_valid(sock->sk));
+	TCP_SKB_CB(back)->sacked &= ~TCPCB_SACKED_ACKED;
+	tp->sacked_out -= tcp_skb_pcount(back);
 	B_EXPECT(!b_valid(sock->sk));
+	TCP_SKB_CB(back)->sacked |= TCPCB_SACKED_ACKED;
+	tp->sacked_out += tcp_skb_pcount(back);
 	list_add(&back->tcp_tsorted_anchor, &skb->tcp_tsorted_anchor);
 	B_EXPECT(b_valid(sock->sk));
 	pr_info("BVERIFY invariants counters=5/5/5 hints=live tsorted=adjacent negative-controls=3\n");
