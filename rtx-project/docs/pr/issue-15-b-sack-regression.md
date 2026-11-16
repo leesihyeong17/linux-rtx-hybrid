@@ -2,6 +2,9 @@
 
 이슈: https://github.com/leesihyeong17/linux-rtx-hybrid/issues/15
 
+PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/20
+구현·검증 문서 커밋: `432026cf5080532f2358b5edcbfd92d81994b9a9`.
+
 기준 커밋: `73747d3f1657c577fcd0f9a8179bcb7fbdb9e78e`.
 작업 브랜치: `test/b-sack-boundary-regression`. PR 대상은 저장소의 통합 브랜치 `main`이다.
 
