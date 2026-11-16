@@ -1,7 +1,7 @@
 # #15 C 도메인 SACK shift·누적 ACK·힌트·DSACK 공동 회귀
 
 이슈: https://github.com/leesihyeong17/linux-rtx-hybrid/issues/15
-PR: 생성 전. 브랜치 `c/sack-ack-regression`.
+PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/23. 브랜치 `c/sack-ack-regression`.
 기반: B의 `test/b-sack-boundary-regression`(#20, `0ee4a1a71`). 이 PR은 B의 overlay·검사기를 그대로 쓰므로 #20 위에 쌓는다.
 실행 기준: 위 브랜치에 main `cc843d480`과 C 카운터 PR #21(`8bab2171d`까지)을 합친 트리. fixture가 #21의 shift·ACK 카운터를 읽기 때문이다.
 
@@ -161,5 +161,5 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
   - RACK 시간 기반 손실(`C_NOLOSS`는 모든 skb의 송신 시각이 같다)
   - TLP·RTO 타이머 발화
 - 환경 확대: gcc 9.4·ARM64(D), 다중 CPU, IPv6, 실제 NIC는 미실행이다.
-- #20 머지 뒤 이 PR의 base를 main으로 바꾼다. #21 머지 전에는 이 fixture의 shift·ACK 카운터 검사가 실패한다(카운터 증가 코드가 #21에 있음).
+- #20 머지 뒤 이 PR의 base를 main으로 바꾼다. #21(카운터 연결)은 11/16 머지됐다. #20 머지 뒤 main 기준으로 같은 실행을 한 번 더 확인한다.
 - #15 매트릭스에서 C 담당 행은 위 미검증을 빼고 채웠다. 이슈 종료는 B·A와 합의해 판단한다.
