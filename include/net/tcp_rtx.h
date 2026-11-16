@@ -61,10 +61,28 @@ static inline void rtx_assert_no_txn(const struct sock *sk)
 /*
  * ---- measurement counters (CONFIG_TCP_RTX_STATS) ----
  *
- * Per-CPU event counters plus a histogram of the queue length N, sampled
- * every time an skb is linked into the queue. N counts skbs (a GSO skb is
- * one entry), not TCP segments. Read with `cat /proc/rtx_stats`, reset by
- * writing anything to it as root (do it while no traffic is running).
+ * Per-CPU event counters plus two histograms of the queue length N
+ * (tcp_sock::rtx_count). N counts skbs (a GSO skb is one entry), not TCP
+ * segments.
+ *
+ *   n_link  N right after an skb is linked (append, ordered or split).
+ *           One sample per insert, so it is weighted by insert events.
+ *   n_ack   N on entry to tcp_clean_rtx_queue(), before anything is
+ *           removed. One sample per ACK processed with packets in flight;
+ *           this is the queue length the ACK/SACK path actually walks.
+ *
+ * Neither is a time-weighted occupancy. Buckets 0..RTX_N_EXACT_MAX hold
+ * exactly that N, so the share of N <= K is exact for any K <= 64; above
+ * that buckets are powers of two and the last one is open.
+ *
+ * /proc/rtx_stats (root to write):
+ *   cat                     sums over all CPUs
+ *   echo 0                  reset counters and histograms
+ *   echo "port 5001"        count only sockets whose local or remote port
+ *                           is 5001 (sockets still keep their own N)
+ *   echo "port 0"           count every socket again (default)
+ * Reset only while the measured traffic is stopped; the reset is not atomic
+ * with respect to concurrent updates.
  *
  * The enum is always defined so call sites compile in every configuration.
  * With the option off, all helpers are empty and the generated code does
@@ -95,29 +113,67 @@ enum rtx_stat {
 	__RTX_STAT_MAX
 };
 
-/* N histogram bucket b holds N in [2^b, 2^(b+1)-1]; the last is open. */
-#define RTX_N_HIST_BUCKETS	16
+/* N histograms: one bucket per N for 0..64, then [65,127], [128,255], ...
+ * up to an open [16384,) bucket.
+ */
+#define RTX_N_EXACT_MAX		64
+#define RTX_N_LOG_BUCKETS	9
+#define RTX_N_HIST_BUCKETS	(RTX_N_EXACT_MAX + 1 + RTX_N_LOG_BUCKETS)
+
+enum rtx_n_hist {
+	RTX_N_LINK,
+	RTX_N_ACK,
+	__RTX_N_MAX
+};
+
+static inline unsigned int rtx_n_bucket(u32 n)
+{
+	unsigned int b;
+
+	if (n <= RTX_N_EXACT_MAX)
+		return n;
+	/* ilog2(65..127) == ilog2(RTX_N_EXACT_MAX) == 6 -> first log bucket */
+	b = RTX_N_EXACT_MAX + 1 + ilog2(n) - ilog2(RTX_N_EXACT_MAX);
+	return min_t(unsigned int, b, RTX_N_HIST_BUCKETS - 1);
+}
 
 #ifdef CONFIG_TCP_RTX_STATS
 struct rtx_stats {
 	u64 cnt[__RTX_STAT_MAX];
-	u64 n_hist[RTX_N_HIST_BUCKETS];
+	u64 n_hist[__RTX_N_MAX][RTX_N_HIST_BUCKETS];
 };
 DECLARE_PER_CPU(struct rtx_stats, rtx_stats);
 
-static inline void rtx_stat_add(enum rtx_stat id, u64 val)
+/* Port filter in network byte order, 0 = count every socket. */
+extern __be16 rtx_stats_port;
+
+static inline bool rtx_stat_match(const struct sock *sk)
 {
-	this_cpu_add(rtx_stats.cnt[id], val);
+	__be16 port = READ_ONCE(rtx_stats_port);
+
+	return !port || inet_sk(sk)->inet_sport == port ||
+	       inet_sk(sk)->inet_dport == port;
+}
+
+static inline void rtx_stat_add(const struct sock *sk, enum rtx_stat id,
+				u64 val)
+{
+	if (rtx_stat_match(sk))
+		this_cpu_add(rtx_stats.cnt[id], val);
+}
+
+static inline void rtx_stat_n(const struct sock *sk, enum rtx_n_hist h)
+{
+	unsigned int b = rtx_n_bucket(tcp_sk(sk)->rtx_count);
+
+	if (rtx_stat_match(sk))
+		this_cpu_inc(rtx_stats.n_hist[h][b]);
 }
 
 static inline void __rtx_count_link(struct sock *sk)
 {
-	u32 n = ++tcp_sk(sk)->rtx_count;
-	unsigned int b = ilog2(n);
-
-	if (b >= RTX_N_HIST_BUCKETS)
-		b = RTX_N_HIST_BUCKETS - 1;
-	this_cpu_inc(rtx_stats.n_hist[b]);
+	tcp_sk(sk)->rtx_count++;
+	rtx_stat_n(sk, RTX_N_LINK);
 }
 
 static inline void __rtx_count_unlink(struct sock *sk)
@@ -125,7 +181,12 @@ static inline void __rtx_count_unlink(struct sock *sk)
 	tcp_sk(sk)->rtx_count--;
 }
 #else
-static inline void rtx_stat_add(enum rtx_stat id, u64 val)
+static inline void rtx_stat_add(const struct sock *sk, enum rtx_stat id,
+				u64 val)
+{
+}
+
+static inline void rtx_stat_n(const struct sock *sk, enum rtx_n_hist h)
 {
 }
 
@@ -138,9 +199,9 @@ static inline void __rtx_count_unlink(struct sock *sk)
 }
 #endif
 
-static inline void rtx_stat_inc(enum rtx_stat id)
+static inline void rtx_stat_inc(const struct sock *sk, enum rtx_stat id)
 {
-	rtx_stat_add(id, 1);
+	rtx_stat_add(sk, id, 1);
 }
 
 /* ---- backend internals (no transaction check) ---- */
@@ -272,7 +333,7 @@ static inline void __rtx_limit(struct sock *sk)
 	tp->rtx_recent_len--;
 	/* General ordered insertion also performs RB balancing. */
 	__rtx_tree_insert(sk, skb);
-	rtx_stat_inc(RTX_STAT_PROMOTE);
+	rtx_stat_inc(sk, RTX_STAT_PROMOTE);
 }
 #endif
 
@@ -285,7 +346,7 @@ static inline void __rtx_unlink(struct sock *sk, struct sk_buff *skb,
 	if (domain == RTX_DOMAIN_LIST) {
 		list_del(&skb->list);
 		tp->rtx_recent_len--;
-		rtx_stat_inc(RTX_STAT_UNLINK_LIST);
+		rtx_stat_inc(sk, RTX_STAT_UNLINK_LIST);
 		goto counted;
 	}
 	if (tp->rtx_tree_first == skb)
@@ -294,7 +355,7 @@ static inline void __rtx_unlink(struct sock *sk, struct sk_buff *skb,
 		tp->rtx_tree_last = skb_rb_prev(skb);
 #endif
 	rb_erase(&skb->rbnode, &sk->tcp_rtx_queue);
-	rtx_stat_inc(RTX_STAT_UNLINK_TREE);
+	rtx_stat_inc(sk, RTX_STAT_UNLINK_TREE);
 #ifdef CONFIG_TCP_RTX_HYBRID
 counted:
 #endif
@@ -417,8 +478,8 @@ static inline struct sk_buff *rtx_find_cover(struct sock *sk, u32 seq)
 
 	rtx_assert_no_txn(sk);
 	skb = __rtx_find_cover(sk, seq, &steps, &list_search);
-	rtx_stat_inc(RTX_STAT_FIND_COVER);
-	rtx_stat_add(list_search ? RTX_STAT_FIND_COVER_LIST_STEPS :
+	rtx_stat_inc(sk, RTX_STAT_FIND_COVER);
+	rtx_stat_add(sk, list_search ? RTX_STAT_FIND_COVER_LIST_STEPS :
 		     RTX_STAT_FIND_COVER_TREE_STEPS, steps);
 	return skb;
 }
@@ -445,7 +506,7 @@ static inline void rtx_insert_ordered(struct sock *sk, struct sk_buff *skb)
 	} else
 #endif
 		__rtx_tree_insert(sk, skb);
-	rtx_stat_inc(RTX_STAT_INSERT_ORDERED);
+	rtx_stat_inc(sk, RTX_STAT_INSERT_ORDERED);
 	__rtx_count_link(sk);
 }
 
@@ -462,7 +523,7 @@ static inline void rtx_append(struct sock *sk, struct sk_buff *skb)
 #else
 	__rtx_tree_insert(sk, skb);
 #endif
-	rtx_stat_inc(RTX_STAT_INSERT_APPEND);
+	rtx_stat_inc(sk, RTX_STAT_INSERT_APPEND);
 	__rtx_count_link(sk);
 }
 
@@ -659,7 +720,7 @@ static inline void rtx_split_commit(struct sock *sk,
 	} else
 #endif
 		__rtx_tree_insert(sk, buff);
-	rtx_stat_inc(RTX_STAT_INSERT_SPLIT);
+	rtx_stat_inc(sk, RTX_STAT_INSERT_SPLIT);
 	__rtx_count_link(sk);
 	tok->skb = NULL;
 }

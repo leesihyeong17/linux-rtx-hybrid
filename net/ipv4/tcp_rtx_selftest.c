@@ -425,8 +425,27 @@ static void st_find_cover_sweep(u32 base, const char *what)
 	st_free(sk);
 }
 
+/* N histogram bucket edges (/proc/rtx_stats n_link, n_ack). */
+static void st_n_bucket(void)
+{
+	static const struct { u32 n; unsigned int b; } t[] = {
+		{ 0, 0 }, { 1, 1 }, { 16, 16 }, { 17, 17 }, { 64, 64 },
+		{ 65, 65 }, { 127, 65 }, { 128, 66 }, { 255, 66 },
+		{ 16383, RTX_N_HIST_BUCKETS - 2 },
+		{ 16384, RTX_N_HIST_BUCKETS - 1 },
+		{ U32_MAX, RTX_N_HIST_BUCKETS - 1 },
+	};
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(t); i++)
+		CHECK(rtx_n_bucket(t[i].n) == t[i].b,
+		      "rtx_n_bucket(%u) = %u, want %u",
+		      t[i].n, rtx_n_bucket(t[i].n), t[i].b);
+}
+
 static int __init rtx_selftest_init(void)
 {
+	st_n_bucket();
 	st_split_positions(1000);
 	/* sequence space wraps inside the queue */
 	st_split_positions(0xfffffd00);

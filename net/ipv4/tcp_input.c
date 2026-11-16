@@ -1334,7 +1334,7 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 	if (skb->len > 0) {
 		BUG_ON(!tcp_skb_pcount(skb));
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_SACKSHIFTED);
-		rtx_stat_inc(RTX_STAT_SHIFT_PARTIAL);
+		rtx_stat_inc(sk, RTX_STAT_SHIFT_PARTIAL);
 		rtx_shift_commit(sk, &tok, false);
 		return false;
 	}
@@ -1366,7 +1366,7 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 	sk_wmem_free_skb(sk, skb);
 
 	NET_INC_STATS(sock_net(sk), LINUX_MIB_SACKMERGED);
-	rtx_stat_inc(RTX_STAT_SHIFT_MERGE);
+	rtx_stat_inc(sk, RTX_STAT_SHIFT_MERGE);
 
 	return true;
 }
@@ -1536,7 +1536,7 @@ noop:
 
 fallback:
 	NET_INC_STATS(sock_net(sk), LINUX_MIB_SACKSHIFTFALLBACK);
-	rtx_stat_inc(RTX_STAT_SHIFT_FALLBACK);
+	rtx_stat_inc(sk, RTX_STAT_SHIFT_FALLBACK);
 	return NULL;
 }
 
@@ -1557,7 +1557,7 @@ static struct sk_buff *tcp_sacktag_walk(struct sk_buff *skb, struct sock *sk,
 		if (!before(TCP_SKB_CB(skb)->seq, end_seq))
 			break;
 
-		rtx_stat_inc(RTX_STAT_SACK_WALK_SKB);
+		rtx_stat_inc(sk, RTX_STAT_SACK_WALK_SKB);
 
 		if (next_dup  &&
 		    before(TCP_SKB_CB(skb)->seq, next_dup->end_seq)) {
@@ -1618,7 +1618,7 @@ static struct sk_buff *tcp_sacktag_skip(struct sk_buff *skb, struct sock *sk,
 					u32 skip_to_seq)
 {
 	if (skb && after(TCP_SKB_CB(skb)->seq, skip_to_seq)) {
-		rtx_stat_inc(RTX_STAT_SACK_SKIP_REUSE);
+		rtx_stat_inc(sk, RTX_STAT_SACK_SKIP_REUSE);
 		return skb;
 	}
 
@@ -1765,7 +1765,7 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 		bool dup_sack = (found_dup_sack && (i == first_sack_index));
 		struct tcp_sack_block *next_dup = NULL;
 
-		rtx_stat_inc(RTX_STAT_SACK_BLOCK);
+		rtx_stat_inc(sk, RTX_STAT_SACK_BLOCK);
 
 		if (found_dup_sack && ((i + 1) == first_sack_index))
 			next_dup = &sp[i + 1];
@@ -3104,7 +3104,8 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 	int flag = 0;
 
 	first_ackt = 0;
-	rtx_stat_inc(RTX_STAT_ACK_CLEAN);
+	rtx_stat_inc(sk, RTX_STAT_ACK_CLEAN);
+	rtx_stat_n(sk, RTX_N_ACK);
 
 	for (skb = rtx_first(sk); skb; skb = next) {
 		struct tcp_skb_cb *scb = TCP_SKB_CB(skb);
@@ -3123,7 +3124,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 			acked_pcount = tcp_tso_acked(sk, skb);
 			if (!acked_pcount)
 				break;
-			rtx_stat_inc(RTX_STAT_ACK_TRIM);
+			rtx_stat_inc(sk, RTX_STAT_ACK_TRIM);
 			fully_acked = false;
 		} else {
 			acked_pcount = tcp_skb_pcount(skb);
@@ -3185,7 +3186,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 			tp->lost_skb_hint = NULL;
 		tcp_highest_sack_replace(sk, skb, next);
 		tcp_rtx_queue_unlink_and_free(skb, sk);
-		rtx_stat_inc(RTX_STAT_ACK_UNLINK);
+		rtx_stat_inc(sk, RTX_STAT_ACK_UNLINK);
 	}
 
 	if (!skb)
