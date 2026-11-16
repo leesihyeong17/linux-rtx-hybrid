@@ -3264,9 +3264,11 @@ int tcp_send_synack(struct sock *sk)
 				return -ENOMEM;
 			INIT_LIST_HEAD(&nskb->tcp_tsorted_anchor);
 			tcp_highest_sack_replace(sk, skb, nskb);
-			tcp_rtx_queue_unlink_and_free(skb, sk);
+			rtx_replace(sk, skb, nskb);
+			list_del(&skb->tcp_tsorted_anchor);
+			tcp_skb_tsorted_anchor_cleanup(skb);
+			sk_wmem_free_skb(sk, skb);
 			__skb_header_release(nskb);
-			rtx_insert_ordered(sk, nskb);
 			sk_wmem_queued_add(sk, nskb->truesize);
 			sk_mem_charge(sk, nskb->truesize);
 			skb = nskb;

@@ -469,6 +469,7 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 
 	newicsk = inet_csk(newsk);
 	newtp = tcp_sk(newsk);
+	rtx_init(newsk);
 	oldtp = tcp_sk(sk);
 
 	smc_check_reset_syn_req(oldtp, req, newtp);

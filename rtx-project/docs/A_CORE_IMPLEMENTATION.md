@@ -13,7 +13,7 @@ A는 재전송 큐의 공통 API(`rtx_*`), 자료구조, 불변식 검증, 초�
 | 커널 | Linux v5.4.214 |
 | 팀 기준선 | `v0-baseline` = `991defcc56cad49cfb221f44f5d161c9ea920c4a` |
 | upstream | gregkh stable `v5.4.214` = `9f02aa34e179d1b0185a27980dd5bafd0f2e6e59` |
-| 현재 backend | RB (V1). 하이브리드 T+L은 미구현 |
+| 현재 backend | RB 기본값 유지. TCP_RTX_HYBRID로 T+L 선택 가능. #14 구현·검증 기록은 아래 링크 참조 |
 | 설계 기준 | [design.md](design.md) 3·4·5·7절 |
 
 | 작업 | 커밋·PR | 상태 |
@@ -27,7 +27,9 @@ A는 재전송 큐의 공통 API(`rtx_*`), 자료구조, 불변식 검증, 초�
 | merge·trim 계약(③) 초안 | — | 11/13 목표 |
 | RB용 merge API | — | 11/15 목표 |
 | 하이브리드 모델·`rtx_validate()` | — | 미착수 |
-| 커널 하이브리드 backend | — | 미착수 |
+| 커널 하이브리드 backend | #14 | LIST·승격·캐시·split·shift token·replace·child 초기화 구현 |
+
+#14의 최신 API 변경, 설계 선택과 실제 검증 범위는 [대표 작업 문서](pr/issue-14-list-promotion-integration.md)에 기록한다. 아래 기존 RB 표·계약과 과거 실행 결과는 당시 기준이다. `rtx_validate_structure()`는 구조 검사만 제공하며 범용 TCP validator나 전체 하이브리드 모델 검증의 완료를 뜻하지 않는다.
 
 ## 2. 구조와 책임
 
@@ -41,7 +43,7 @@ TCP 송신(B) · ACK/SACK(C) · 타이머·복구
         rtx_* 공통 API  (include/net/tcp_rtx.h, A 소유)
                  |
                  v
-   backend: RB(V1, 현재)  →  T rbtree + L 리스트(V4, 예정)
+   backend: RB(기본) 또는 T rbtree + L 리스트(CONFIG_TCP_RTX_HYBRID)
 ```
 
 | 파일 | 내용 | 소유 |

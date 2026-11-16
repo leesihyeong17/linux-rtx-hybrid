@@ -20,6 +20,7 @@ metadata = '\n'.join([
     (run / 'environment.txt').read_text().strip(),
 ])
 patterns = {
+    'hybrid': ('BVERIFY hybrid ',),
     'failures': ('failure-boundary=',),
     'boundaries': ('boundary base=', 'single-resplit'),
     'callers': ('write-queue caller=', 'BVERIFY caller='),

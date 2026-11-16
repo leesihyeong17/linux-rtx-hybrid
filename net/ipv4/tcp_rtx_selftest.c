@@ -60,6 +60,7 @@ static void st_free(struct sock *sk)
 		kfree_skb(skb);
 	}
 	CHECK(rtx_empty(sk), "queue not empty after unlinking everything");
+	CHECK(rtx_validate_structure(sk), "empty structure invalid");
 #ifdef CONFIG_TCP_RTX_STATS
 	CHECK(tcp_sk(sk)->rtx_count == 0, "rtx_count %u after unlinking everything",
 	      tcp_sk(sk)->rtx_count);
@@ -78,6 +79,12 @@ static bool st_fill(struct sock *sk, u32 base, int n)
 		if (!skb)
 			return false;
 		rtx_append(sk, skb);
+#ifdef CONFIG_TCP_RTX_HYBRID
+		CHECK(tcp_sk(sk)->rtx_recent_len ==
+		      min_t(unsigned int, i + 1, CONFIG_TCP_RTX_RECENT_MAX),
+		      "append capacity");
+		CHECK(rtx_validate_structure(sk), "append structure");
+#endif
 	}
 	return true;
 }
@@ -103,6 +110,7 @@ static int st_check_order(struct sock *sk, u32 base, u32 end)
 		prev = skb;
 		n++;
 	}
+	CHECK(rtx_validate_structure(sk), "invalid structure");
 	CHECK(expect == end, "queue ends at %u, expected %u", expect, end);
 	CHECK(rtx_last(sk) == prev, "rtx_last is not the last walked skb");
 #ifdef CONFIG_TCP_RTX_STATS
@@ -116,13 +124,14 @@ static int st_check_order(struct sock *sk, u32 base, u32 end)
 static struct sk_buff *st_split(struct sock *sk, struct sk_buff *skb, u32 len)
 {
 	struct rtx_split_token tok;
+	enum rtx_domain domain = rtx_domain(sk, skb);
 	struct sk_buff *buff = st_skb(0, 0);
 
 	if (!buff)
 		return NULL;
 
 	rtx_split_prepare(sk, skb, &tok);
-	CHECK(tok.skb == skb && tok.domain == RTX_DOMAIN_TREE,
+	CHECK(tok.skb == skb && tok.domain == domain,
 	      "token does not record skb/domain");
 	CHECK(tcp_sk(sk)->rtx_txn_open, "transaction not open after prepare");
 
@@ -204,6 +213,122 @@ static void st_split_single(void)
 	st_free(sk);
 }
 
+#ifdef CONFIG_TCP_RTX_HYBRID
+static void st_hybrid(void)
+{
+	struct sock *sk = st_sock();
+	struct sk_buff *head, *back, *next, *replacement;
+	struct rtx_shift_token tok;
+	struct tcp_sock *child;
+	const int k = CONFIG_TCP_RTX_RECENT_MAX;
+	u32 base = 0xffffff00U;
+
+	if (!sk || !st_fill(sk, base, k)) {
+		CHECK(0, "hybrid setup failed");
+		if (sk)
+			st_free(sk);
+		return;
+	}
+	CHECK(RB_EMPTY_ROOT(&sk->tcp_rtx_queue), "K entries must stay in LIST");
+	CHECK(tcp_sk(sk)->rtx_recent_len == k, "LIST length at K");
+	head = rtx_first(sk);
+	back = st_split(sk, head, 30);
+	CHECK(rtx_domain(sk, head) == RTX_DOMAIN_TREE, "head not promoted");
+	CHECK(back && rtx_domain(sk, back) == RTX_DOMAIN_LIST,
+	      "new fragment not in LIST");
+	CHECK(tcp_sk(sk)->rtx_tree_first == head &&
+	      tcp_sk(sk)->rtx_tree_last == head, "promotion cache");
+	tcp_sk(sk)->rtx_recent_len++;
+	CHECK(!rtx_validate_structure(sk), "bad length undetected");
+	tcp_sk(sk)->rtx_recent_len--;
+	tcp_sk(sk)->rtx_tree_last = NULL;
+	CHECK(!rtx_validate_structure(sk), "bad cache undetected");
+	tcp_sk(sk)->rtx_tree_last = head;
+	CHECK(st_check_order(sk, base, base + k * SEG) == k + 1,
+	      "promotion order");
+
+	/* Reinitialize the copied sentinel without touching the parent. */
+	child = kmemdup(tcp_sk(sk), sizeof(*child), GFP_KERNEL);
+	CHECK(child, "child allocation");
+	if (child) {
+		rtx_init((struct sock *)child);
+		CHECK(rtx_empty((struct sock *)child) &&
+		      rtx_validate_structure((struct sock *)child),
+		      "child init");
+		CHECK(tcp_sk(sk)->rtx_recent_len == k, "parent changed");
+		st_free((struct sock *)child);
+	}
+
+	/* Replace on both sides of the boundary without changing membership. */
+	replacement = st_skb(TCP_SKB_CB(head)->seq, TCP_SKB_CB(head)->end_seq);
+	CHECK(replacement, "replacement allocation");
+	if (replacement) {
+		rtx_replace(sk, head, replacement);
+		kfree_skb(head);
+		head = replacement;
+		CHECK(tcp_sk(sk)->rtx_tree_first == head &&
+		      tcp_sk(sk)->rtx_tree_last == head, "replacement cache");
+	}
+	next = rtx_last(sk);
+	replacement = st_skb(TCP_SKB_CB(next)->seq, TCP_SKB_CB(next)->end_seq);
+	CHECK(replacement, "LIST replacement allocation");
+	if (replacement) {
+		rtx_replace(sk, next, replacement);
+		kfree_skb(next);
+		CHECK(rtx_last(sk) == replacement &&
+		      rtx_domain(sk, replacement) == RTX_DOMAIN_LIST,
+		      "LIST replacement membership");
+	}
+
+	/* Force the exact full-shift hazard: TREE seq becomes LIST head seq. */
+	rtx_shift_prepare(sk, head, &tok);
+	next = tok.next;
+	TCP_SKB_CB(head)->seq = TCP_SKB_CB(head)->end_seq;
+	rtx_shift_commit(sk, &tok, true);
+	kfree_skb(head);
+	CHECK(rtx_first(sk) == next && RB_EMPTY_ROOT(&sk->tcp_rtx_queue),
+	      "full shift removed wrong domain");
+	CHECK(rtx_validate_structure(sk), "shift structure");
+	st_free(sk);
+	pr_info("rtx_selftest: hybrid K=%d promotion/replace/shift/child executed\n",
+		k);
+}
+
+static void st_hybrid_ordered(void)
+{
+	struct sock *sk = st_sock();
+	struct sk_buff *a = st_skb(1000, 1050);
+	struct sk_buff *b = st_skb(1100, 1150);
+	struct sk_buff *gap = st_skb(1050, 1100);
+	struct sk_buff *prefix = st_skb(950, 1000);
+
+	if (!sk || !a || !b || !gap || !prefix) {
+		CHECK(0, "ordered setup");
+		kfree_skb(a);
+		kfree_skb(b);
+		kfree_skb(gap);
+		kfree_skb(prefix);
+		if (sk)
+			st_free(sk);
+		return;
+	}
+	rtx_append(sk, a);
+	rtx_append(sk, b);
+	CHECK(!rtx_find_cover(sk, 1075), "hole must not match");
+	rtx_insert_ordered(sk, gap);
+	rtx_insert_ordered(sk, prefix);
+	CHECK(st_check_order(sk, 950, 1150) == 4, "ordered insertion");
+	CHECK(rtx_find_cover(sk, 1050) == gap, "half-open boundary");
+	CHECK(!rtx_find_cover(sk, 1150), "end excluded");
+	/* Partial trim does not cross a neighbour or change the domain. */
+	TCP_SKB_CB(a)->seq += 10;
+	CHECK(!rtx_find_cover(sk, 1005) && rtx_find_cover(sk, 1010) == a,
+	      "trim lookup");
+	CHECK(rtx_validate_structure(sk), "trim structure");
+	st_free(sk);
+}
+#endif
+
 static int __init rtx_selftest_init(void)
 {
 	st_split_positions(1000);
@@ -212,6 +337,10 @@ static int __init rtx_selftest_init(void)
 	/* the first skb itself crosses the wrap */
 	st_split_positions(0xffffffe0);
 	st_split_single();
+#ifdef CONFIG_TCP_RTX_HYBRID
+	st_hybrid();
+	st_hybrid_ordered();
+#endif
 
 	pr_info("rtx_selftest: %d passed, %d failed\n", rtx_st_pass, rtx_st_fail);
 	return 0;

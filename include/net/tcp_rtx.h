@@ -3,8 +3,7 @@
  * TCP retransmit queue adapter (rtx_*)
  *
  * All structural access to the retransmit queue should go through these
- * helpers, so that the backend (plain rbtree today, hybrid tree + list
- * later) can be changed without touching the callers.
+ * helpers, with either the baseline rbtree or a bounded list suffix.
  *
  * Contract (design doc section 7):
  *  - Locking: the caller already holds the socket serialization of its
@@ -18,8 +17,7 @@
  *  - Split: see the rtx_split_* section below.
  *  - Measurement counters: see the CONFIG_TCP_RTX_STATS section below.
  *
- * Backend: RB (V1). Thin wrappers around the existing rbtree code, so the
- * generated code should be identical to the unmodified kernel.
+ * Backend: RB by default; CONFIG_TCP_RTX_HYBRID enables the list suffix.
  *
  * Helpers starting with __rtx_ are backend internals. Callers outside this
  * file must not use them.
@@ -38,7 +36,7 @@
 
 void tcp_rbtree_insert(struct rb_root *root, struct sk_buff *skb);
 
-/* Which part of the queue an skb lives in. The RB backend only has TREE. */
+/* Which part of the queue a currently linked skb lives in. */
 enum rtx_domain {
 	RTX_DOMAIN_TREE = 0,
 	RTX_DOMAIN_LIST = 1,
@@ -147,14 +145,81 @@ static inline void rtx_stat_inc(enum rtx_stat id)
 
 /* ---- backend internals (no transaction check) ---- */
 
-/* @steps (may be NULL) receives the number of tree nodes compared. */
+#ifdef CONFIG_TCP_RTX_HYBRID
+static inline struct sk_buff *__rtx_list_first(const struct sock *sk)
+{
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	if (list_empty(&tp->rtx_recent))
+		return NULL;
+	return list_entry(tp->rtx_recent.next, struct sk_buff, list);
+}
+#endif
+
+/* Sequence partition, valid only outside a sequence-changing transaction. */
+static inline enum rtx_domain __rtx_domain(const struct sock *sk,
+					 const struct sk_buff *skb)
+{
+#ifdef CONFIG_TCP_RTX_HYBRID
+	const struct sk_buff *first = __rtx_list_first(sk);
+
+	if (first && !before(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(first)->seq))
+		return RTX_DOMAIN_LIST;
+#endif
+	return RTX_DOMAIN_TREE;
+}
+
+static inline enum rtx_domain rtx_domain(const struct sock *sk,
+					const struct sk_buff *skb)
+{
+	enum rtx_domain domain;
+#if defined(CONFIG_TCP_RTX_DEBUG) && defined(CONFIG_TCP_RTX_HYBRID)
+	const struct sk_buff *pos;
+	bool member = false;
+#endif
+
+	rtx_assert_no_txn(sk);
+	domain = __rtx_domain(sk, skb);
+#if defined(CONFIG_TCP_RTX_DEBUG) && defined(CONFIG_TCP_RTX_HYBRID)
+	list_for_each_entry(pos, &tcp_sk(sk)->rtx_recent, list) {
+		if (pos == skb) {
+			member = true;
+			break;
+		}
+	}
+	WARN_ON_ONCE(member != (domain == RTX_DOMAIN_LIST));
+#endif
+	return domain;
+}
+
+/* Report the selected partition and number of nodes compared. */
 static inline struct sk_buff *__rtx_find_cover(struct sock *sk, u32 seq,
-					       unsigned int *steps)
+					       unsigned int *steps,
+					       bool *list_search)
 {
 	struct rb_node *parent, **p = &sk->tcp_rtx_queue.rb_node;
 	struct sk_buff *skb, *found = NULL;
 	unsigned int n = 0;
 
+	if (list_search)
+		*list_search = false;
+#ifdef CONFIG_TCP_RTX_HYBRID
+	skb = __rtx_list_first(sk);
+	if (skb && !before(seq, TCP_SKB_CB(skb)->seq)) {
+		if (list_search)
+			*list_search = true;
+		list_for_each_entry(skb, &tcp_sk(sk)->rtx_recent, list) {
+			n++;
+			if (before(seq, TCP_SKB_CB(skb)->seq))
+				break;
+			if (before(seq, TCP_SKB_CB(skb)->end_seq)) {
+				found = skb;
+				break;
+			}
+		}
+		goto done;
+	}
+#endif
 	while (*p) {
 		parent = *p;
 		skb = rb_to_skb(parent);
@@ -170,6 +235,9 @@ static inline struct sk_buff *__rtx_find_cover(struct sock *sk, u32 seq,
 		found = skb;
 		break;
 	}
+#ifdef CONFIG_TCP_RTX_HYBRID
+done:
+#endif
 	if (steps)
 		*steps = n;
 	return found;
@@ -179,6 +247,58 @@ static inline struct sk_buff *__rtx_find_cover(struct sock *sk, u32 seq,
 static inline void __rtx_tree_insert(struct sock *sk, struct sk_buff *skb)
 {
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (!tcp_sk(sk)->rtx_tree_first ||
+	    before(TCP_SKB_CB(skb)->seq,
+		   TCP_SKB_CB(tcp_sk(sk)->rtx_tree_first)->seq))
+		tcp_sk(sk)->rtx_tree_first = skb;
+	if (!tcp_sk(sk)->rtx_tree_last ||
+	    after(TCP_SKB_CB(skb)->seq,
+		  TCP_SKB_CB(tcp_sk(sk)->rtx_tree_last)->seq))
+		tcp_sk(sk)->rtx_tree_last = skb;
+#endif
+}
+
+#ifdef CONFIG_TCP_RTX_HYBRID
+static inline void __rtx_limit(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	struct sk_buff *skb;
+
+	if (tp->rtx_recent_len <= CONFIG_TCP_RTX_RECENT_MAX)
+		return;
+	skb = __rtx_list_first(sk);
+	list_del(&skb->list);
+	tp->rtx_recent_len--;
+	/* General ordered insertion also performs RB balancing. */
+	__rtx_tree_insert(sk, skb);
+	rtx_stat_inc(RTX_STAT_PROMOTE);
+}
+#endif
+
+static inline void __rtx_unlink(struct sock *sk, struct sk_buff *skb,
+				 enum rtx_domain domain)
+{
+#ifdef CONFIG_TCP_RTX_HYBRID
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	if (domain == RTX_DOMAIN_LIST) {
+		list_del(&skb->list);
+		tp->rtx_recent_len--;
+		rtx_stat_inc(RTX_STAT_UNLINK_LIST);
+		goto counted;
+	}
+	if (tp->rtx_tree_first == skb)
+		tp->rtx_tree_first = skb_rb_next(skb);
+	if (tp->rtx_tree_last == skb)
+		tp->rtx_tree_last = skb_rb_prev(skb);
+#endif
+	rb_erase(&skb->rbnode, &sk->tcp_rtx_queue);
+	rtx_stat_inc(RTX_STAT_UNLINK_TREE);
+#ifdef CONFIG_TCP_RTX_HYBRID
+counted:
+#endif
+	__rtx_count_unlink(sk);
 }
 
 /* ---- public API ---- */
@@ -186,6 +306,15 @@ static inline void __rtx_tree_insert(struct sock *sk, struct sk_buff *skb)
 static inline void rtx_init(struct sock *sk)
 {
 	sk->tcp_rtx_queue = RB_ROOT;
+#ifdef CONFIG_TCP_RTX_HYBRID
+	INIT_LIST_HEAD(&tcp_sk(sk)->rtx_recent);
+	tcp_sk(sk)->rtx_recent_len = 0;
+	tcp_sk(sk)->rtx_tree_first = NULL;
+	tcp_sk(sk)->rtx_tree_last = NULL;
+#endif
+#ifdef CONFIG_TCP_RTX_DEBUG
+	tcp_sk(sk)->rtx_txn_open = 0;
+#endif
 #ifdef CONFIG_TCP_RTX_STATS
 	tcp_sk(sk)->rtx_count = 0;
 #endif
@@ -200,6 +329,10 @@ static inline void rtx_prefetch(const struct sock *sk)
 static inline bool rtx_empty(const struct sock *sk)
 {
 	rtx_assert_no_txn(sk);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (!list_empty(&tcp_sk(sk)->rtx_recent))
+		return false;
+#endif
 	return RB_EMPTY_ROOT(&sk->tcp_rtx_queue);
 }
 
@@ -207,27 +340,54 @@ static inline bool rtx_empty(const struct sock *sk)
 static inline struct sk_buff *rtx_first(const struct sock *sk)
 {
 	rtx_assert_no_txn(sk);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	return tcp_sk(sk)->rtx_tree_first ?: __rtx_list_first(sk);
+#else
 	return skb_rb_first(&sk->tcp_rtx_queue);
+#endif
 }
 
 /* Highest sequence skb, or NULL if the queue is empty. */
 static inline struct sk_buff *rtx_last(const struct sock *sk)
 {
+#ifdef CONFIG_TCP_RTX_HYBRID
+	const struct tcp_sock *tp = tcp_sk(sk);
+#endif
+
 	rtx_assert_no_txn(sk);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (!list_empty(&tp->rtx_recent))
+		return list_last_entry(&tp->rtx_recent, struct sk_buff, list);
+	return tp->rtx_tree_last;
+#else
 	return skb_rb_last(&sk->tcp_rtx_queue);
+#endif
 }
 
 static inline struct sk_buff *rtx_next(const struct sock *sk,
 				       const struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (rtx_domain(sk, skb) == RTX_DOMAIN_LIST)
+		return skb->list.next == &tcp_sk(sk)->rtx_recent ? NULL :
+			list_entry(skb->list.next, struct sk_buff, list);
+	return skb_rb_next(skb) ?: __rtx_list_first(sk);
+#else
 	return skb_rb_next(skb);
+#endif
 }
 
 static inline struct sk_buff *rtx_prev(const struct sock *sk,
 				       const struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (rtx_domain(sk, skb) == RTX_DOMAIN_LIST)
+		return skb->list.prev == &tcp_sk(sk)->rtx_recent ?
+			tcp_sk(sk)->rtx_tree_last :
+			list_entry(skb->list.prev, struct sk_buff, list);
+#endif
 	return skb_rb_prev(skb);
 }
 
@@ -253,11 +413,13 @@ static inline struct sk_buff *rtx_find_cover(struct sock *sk, u32 seq)
 {
 	struct sk_buff *skb;
 	unsigned int steps;
+	bool list_search;
 
 	rtx_assert_no_txn(sk);
-	skb = __rtx_find_cover(sk, seq, &steps);
+	skb = __rtx_find_cover(sk, seq, &steps, &list_search);
 	rtx_stat_inc(RTX_STAT_FIND_COVER);
-	rtx_stat_add(RTX_STAT_FIND_COVER_TREE_STEPS, steps);
+	rtx_stat_add(list_search ? RTX_STAT_FIND_COVER_LIST_STEPS :
+		     RTX_STAT_FIND_COVER_TREE_STEPS, steps);
 	return skb;
 }
 
@@ -265,18 +427,41 @@ static inline struct sk_buff *rtx_find_cover(struct sock *sk, u32 seq)
 static inline void rtx_insert_ordered(struct sock *sk, struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
-	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (__rtx_domain(sk, skb) == RTX_DOMAIN_LIST) {
+		struct sk_buff *pos;
+		struct list_head *at = &tcp_sk(sk)->rtx_recent;
+
+		list_for_each_entry(pos, &tcp_sk(sk)->rtx_recent, list) {
+			if (before(TCP_SKB_CB(skb)->seq,
+				   TCP_SKB_CB(pos)->seq)) {
+				at = &pos->list;
+				break;
+			}
+		}
+		list_add_tail(&skb->list, at);
+		tcp_sk(sk)->rtx_recent_len++;
+		__rtx_limit(sk);
+	} else
+#endif
+		__rtx_tree_insert(sk, skb);
 	rtx_stat_inc(RTX_STAT_INSERT_ORDERED);
 	__rtx_count_link(sk);
 }
 
 /* Insert an skb that is known to come after the current tail.
- * RB backend: same as an ordered insert. V3 will link it directly.
+ * Hybrid: append to the recent suffix, promoting its head if needed.
  */
 static inline void rtx_append(struct sock *sk, struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
-	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	list_add_tail(&skb->list, &tcp_sk(sk)->rtx_recent);
+	tcp_sk(sk)->rtx_recent_len++;
+	__rtx_limit(sk);
+#else
+	__rtx_tree_insert(sk, skb);
+#endif
 	rtx_stat_inc(RTX_STAT_INSERT_APPEND);
 	__rtx_count_link(sk);
 }
@@ -285,10 +470,113 @@ static inline void rtx_append(struct sock *sk, struct sk_buff *skb)
 static inline void rtx_unlink(struct sock *sk, struct sk_buff *skb)
 {
 	rtx_assert_no_txn(sk);
-	rb_erase(&skb->rbnode, &sk->tcp_rtx_queue);
-	rtx_stat_inc(RTX_STAT_UNLINK_TREE);
-	__rtx_count_unlink(sk);
+	__rtx_unlink(sk, skb, rtx_domain(sk, skb));
 }
+
+/* Replace a linked skb with the same sequence range; TCP owns its lifetime. */
+static inline void rtx_replace(struct sock *sk, struct sk_buff *old,
+			       struct sk_buff *new)
+{
+	rtx_assert_no_txn(sk);
+#ifdef CONFIG_TCP_RTX_DEBUG
+	WARN_ON_ONCE(TCP_SKB_CB(old)->seq != TCP_SKB_CB(new)->seq ||
+		     TCP_SKB_CB(old)->end_seq != TCP_SKB_CB(new)->end_seq);
+#endif
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (rtx_domain(sk, old) == RTX_DOMAIN_LIST) {
+		list_replace(&old->list, &new->list);
+		return;
+	}
+	if (tcp_sk(sk)->rtx_tree_first == old)
+		tcp_sk(sk)->rtx_tree_first = new;
+	if (tcp_sk(sk)->rtx_tree_last == old)
+		tcp_sk(sk)->rtx_tree_last = new;
+#endif
+	rb_replace_node(&old->rbnode, &new->rbnode, &sk->tcp_rtx_queue);
+}
+
+/* SACK shift can consume a TREE skb up to the first LIST sequence.
+ * Save its domain and successor before the sequence mutation, even when
+ * the skb has already lost its payload. Commit never frees the skb.
+ */
+struct rtx_shift_token {
+	struct sk_buff *skb;
+	struct sk_buff *next;
+	u8 domain;
+};
+
+static inline void rtx_shift_prepare(struct sock *sk, struct sk_buff *skb,
+				     struct rtx_shift_token *tok)
+{
+	rtx_assert_no_txn(sk);
+	tok->skb = skb;
+	tok->domain = rtx_domain(sk, skb);
+	tok->next = rtx_next(sk, skb);
+#ifdef CONFIG_TCP_RTX_DEBUG
+	tcp_sk(sk)->rtx_txn_open = 1;
+#endif
+}
+
+static inline void rtx_shift_commit(struct sock *sk,
+				    struct rtx_shift_token *tok, bool remove)
+{
+#ifdef CONFIG_TCP_RTX_DEBUG
+	WARN_ON_ONCE(!tcp_sk(sk)->rtx_txn_open);
+#endif
+	if (remove)
+		__rtx_unlink(sk, tok->skb, tok->domain);
+#ifdef CONFIG_TCP_RTX_DEBUG
+	tcp_sk(sk)->rtx_txn_open = 0;
+#endif
+	tok->skb = NULL;
+	tok->next = NULL;
+}
+
+#ifdef CONFIG_TCP_RTX_DEBUG
+/* Structural checks only, after a transaction. TCP accounting is separate. */
+static inline bool rtx_validate_structure(struct sock *sk)
+{
+	struct sk_buff *skb, *prev = NULL;
+#ifdef CONFIG_TCP_RTX_HYBRID
+	struct tcp_sock *tp = tcp_sk(sk);
+	unsigned int count = 0;
+#endif
+
+	if (tcp_sk(sk)->rtx_txn_open)
+		return false;
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (tp->rtx_tree_first != skb_rb_first(&sk->tcp_rtx_queue) ||
+	    tp->rtx_tree_last != skb_rb_last(&sk->tcp_rtx_queue))
+		return false;
+#endif
+	for (skb = skb_rb_first(&sk->tcp_rtx_queue); skb;
+	     skb = skb_rb_next(skb)) {
+		if (!before(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq) ||
+		    (prev && after(TCP_SKB_CB(prev)->end_seq,
+				   TCP_SKB_CB(skb)->seq)))
+			return false;
+		prev = skb;
+	}
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (tp->rtx_recent.next->prev != &tp->rtx_recent ||
+	    tp->rtx_recent.prev->next != &tp->rtx_recent)
+		return false;
+	list_for_each_entry(skb, &tp->rtx_recent, list) {
+		if (++count > CONFIG_TCP_RTX_RECENT_MAX ||
+		    skb->list.next->prev != &skb->list ||
+		    skb->list.prev->next != &skb->list ||
+		    !before(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq) ||
+		    (prev && after(TCP_SKB_CB(prev)->end_seq,
+				   TCP_SKB_CB(skb)->seq)))
+			return false;
+		prev = skb;
+	}
+	if (count != tp->rtx_recent_len)
+		return false;
+#endif
+	return true;
+}
+#endif
 
 /*
  * ---- split transaction (design doc 3.3 and 5.5) ----
@@ -337,7 +625,7 @@ static inline void rtx_split_prepare(struct sock *sk, struct sk_buff *skb,
 {
 	rtx_assert_no_txn(sk);
 	tok->skb = skb;
-	tok->domain = RTX_DOMAIN_TREE;	/* RB backend: tree only */
+	tok->domain = rtx_domain(sk, skb);
 #ifdef CONFIG_TCP_RTX_DEBUG
 	tok->seq = TCP_SKB_CB(skb)->seq;
 	tok->end_seq = TCP_SKB_CB(skb)->end_seq;
@@ -360,11 +648,17 @@ static inline void rtx_split_commit(struct sock *sk,
 	/* Nothing may cover buff's start yet: otherwise buff (or an
 	 * overlapping skb) is already in the queue.
 	 */
-	WARN_ON_ONCE(__rtx_find_cover(sk, bcb->seq, NULL));
+	WARN_ON_ONCE(__rtx_find_cover(sk, bcb->seq, NULL, NULL));
 	tcp_sk(sk)->rtx_txn_open = 0;
 #endif
-	/* RB backend: tok->domain is always RTX_DOMAIN_TREE. */
-	__rtx_tree_insert(sk, buff);
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (tok->domain == RTX_DOMAIN_LIST) {
+		list_add(&buff->list, &tok->skb->list);
+		tcp_sk(sk)->rtx_recent_len++;
+		__rtx_limit(sk);
+	} else
+#endif
+		__rtx_tree_insert(sk, buff);
 	rtx_stat_inc(RTX_STAT_INSERT_SPLIT);
 	__rtx_count_link(sk);
 	tok->skb = NULL;

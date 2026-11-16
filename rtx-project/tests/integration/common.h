@@ -145,6 +145,7 @@ static void b_release(struct socket *sock)
 	b_fault = 0;
 	tcp_write_queue_purge(sk);
 	B_EXPECT(rtx_empty(sk) && tcp_write_queue_empty(sk));
+	B_EXPECT(rtx_validate_structure(sk));
 	B_EXPECT(list_empty(&tp->tsorted_sent_queue));
 	B_EXPECT(!tp->highest_sack && !tp->lost_skb_hint &&
 		!tp->retransmit_skb_hint);

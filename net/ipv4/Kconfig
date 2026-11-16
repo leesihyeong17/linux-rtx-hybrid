@@ -718,6 +718,24 @@ config DEFAULT_TCP_CONG
 	default "bbr" if DEFAULT_BBR
 	default "cubic"
 
+config TCP_RTX_HYBRID
+	bool "TCP: hybrid retransmit queue"
+	default n
+	help
+	  Keep the recent sequence suffix in a bounded list and promote
+	  its oldest skb to the rbtree when the limit is exceeded.
+	  Experimental; leave disabled for the RB baseline. The list limit
+	  counts skbs and does not change TCP segment or memory accounting.
+
+config TCP_RTX_RECENT_MAX
+	int "Maximum recent retransmit skbs"
+	depends on TCP_RTX_HYBRID
+	range 1 1024
+	default 16
+	help
+	  Bounds the list suffix in skbs, not TCP segments. This is a
+	  build-time setting; 16 is an initial choice, not a tuned optimum.
+
 config TCP_RTX_DEBUG
 	bool "TCP: retransmit queue adapter debug checks"
 	default n
