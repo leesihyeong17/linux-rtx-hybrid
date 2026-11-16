@@ -81,6 +81,12 @@ int c_test_ack(struct sock *sk, struct sk_buff *skb)
 \ttcp_mstamp_refresh(tcp_sk(sk));
 \treturn tcp_ack(sk, skb, FLAG_SLOWPATH);
 }
+
+void c_test_enter_recovery(struct sock *sk);
+void c_test_enter_recovery(struct sock *sk)
+{
+\ttcp_enter_recovery(sk, false);
+}
 '''
 input_file.write_text(input_modified)
 patch = ''.join(difflib.unified_diff(original.splitlines(True), modified.splitlines(True), fromfile='a/net/ipv4/tcp_output.c', tofile='b/net/ipv4/tcp_output.c'))

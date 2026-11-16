@@ -10,7 +10,7 @@
  * Transmission is replaced by a stub that frees the clone.
  */
 int c_test_ack(struct sock *sk, struct sk_buff *skb);
-extern const struct inet_connection_sock_af_ops ipv4_specific;
+void c_test_enter_recovery(struct sock *sk);
 
 #define C_MSS	1000
 #define C_LEN	4000
@@ -18,9 +18,12 @@ extern const struct inet_connection_sock_af_ops ipv4_specific;
 enum c_mode {
 	C_NOLOSS,	/* RACK on, reordering 127: no loss marking */
 	C_CLASSIC,	/* RACK off, reordering 3: tcp_mark_head_lost */
+	C_RACK,		/* RACK on, reordering 3: time-based loss */
 };
 
 static unsigned int c_xmits, c_shape;
+static int c_family = AF_INET;
+static bool c_block_xmit;
 static u32 c_base;
 static int c_saved_recovery;
 static struct inet_connection_sock_af_ops c_af_ops;
@@ -32,9 +35,10 @@ static int c_fake_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl)
 	return 0;
 }
 
+/* c_block_xmit makes retransmission fail before sending (route error). */
 static int c_fake_rebuild(struct sock *sk)
 {
-	return 0;
+	return c_block_xmit ? -EHOSTUNREACH : 0;
 }
 
 static u32 c_seq(unsigned int i)
@@ -92,9 +96,30 @@ static void c_expect_shift(const struct c_count *a, unsigned long partial,
 	B_EXPECT(b.fallback - a->fallback == b.shiftfb - a->shiftfb);
 }
 
+/* b_socket() for AF_INET; the same setup for AF_INET6. */
+static struct socket *c_create(void)
+{
+	struct socket *sock;
+	int err;
+
+	if (c_family == AF_INET)
+		return b_socket();
+	err = sock_create_kern(&init_net, AF_INET6, SOCK_STREAM, IPPROTO_TCP,
+			       &sock);
+	B_EXPECT(!err);
+	if (err)
+		return NULL;
+	lock_sock(sock->sk);
+	sock->sk->sk_sndbuf = 1024 * 1024;
+	b_observe_sk = sock->sk;
+	b_prepare_count = b_commit_count = b_fault_hits = b_fault = 0;
+	b_alloc_count = b_fail_alloc_at = 0;
+	return sock;
+}
+
 static struct socket *c_socket(u32 base, enum c_mode mode)
 {
-	struct socket *sock = b_socket();
+	struct socket *sock = c_create();
 	struct tcp_sock *tp;
 	struct sock *sk;
 
@@ -102,7 +127,7 @@ static struct socket *c_socket(u32 base, enum c_mode mode)
 		return NULL;
 	sk = sock->sk;
 	tp = tcp_sk(sk);
-	c_af_ops = ipv4_specific;
+	c_af_ops = *inet_csk(sk)->icsk_af_ops;
 	c_af_ops.queue_xmit = c_fake_xmit;
 	c_af_ops.rebuild_header = c_fake_rebuild;
 	inet_csk(sk)->icsk_af_ops = &c_af_ops;
@@ -124,8 +149,8 @@ static struct socket *c_socket(u32 base, enum c_mode mode)
 	tp->snd_wl1 = 0;
 	tp->reordering = mode == C_NOLOSS ? 127 : 3;
 	c_saved_recovery = init_net.ipv4.sysctl_tcp_recovery;
-	init_net.ipv4.sysctl_tcp_recovery = mode == C_NOLOSS ?
-		TCP_RACK_LOSS_DETECTION : 0;
+	init_net.ipv4.sysctl_tcp_recovery = mode == C_CLASSIC ? 0 :
+		TCP_RACK_LOSS_DETECTION;
 	inet_sk_state_store(sk, TCP_ESTABLISHED);
 	tcp_init_congestion_control(sk);
 	c_xmits = 0;
@@ -137,6 +162,7 @@ static void c_release(struct socket *sock)
 {
 	struct sock *sk = sock->sk;
 
+	c_block_xmit = false;
 	inet_csk_clear_xmit_timers(sk);
 	inet_sk_state_store(sk, TCP_CLOSE);
 	init_net.ipv4.sysctl_tcp_recovery = c_saved_recovery;
@@ -334,8 +360,9 @@ static void c_state(struct sock *sk, const char *tag)
 	int len = 0, n = 0;
 
 	len += scnprintf(buf + len, sizeof(buf) - len,
-			 "CSTATE k%u %s una=%u nxt=%u po=%u so=%u lo=%u ro=%u del=%u tr=%u ur=%d reo=%u ca=%u hs=%d lh=%d/%u rh=%d q=",
-			 c_shape, tag, tp->snd_una - c_base,
+			 "CSTATE k%u %s%s una=%u nxt=%u po=%u so=%u lo=%u ro=%u del=%u tr=%u ur=%d reo=%u ca=%u hs=%d lh=%d/%u rh=%d q=",
+			 c_shape, c_family == AF_INET6 ? "v6-" : "", tag,
+			 tp->snd_una - c_base,
 			 tp->snd_nxt - c_base, tp->packets_out, tp->sacked_out,
 			 tp->lost_out, tp->retrans_out, tp->delivered,
 			 tp->total_retrans, tp->undo_retrans, tp->reordering,
@@ -349,8 +376,9 @@ static void c_state(struct sock *sk, const char *tag)
 				 TCP_SKB_CB(skb)->sacked, tcp_skb_pcount(skb));
 	pr_info("%s\n", buf);
 #ifdef CONFIG_TCP_RTX_HYBRID
-	len = scnprintf(buf, sizeof(buf), "CDOMAIN k%u %s list=%u ", c_shape,
-			tag, tp->rtx_recent_len);
+	len = scnprintf(buf, sizeof(buf), "CDOMAIN k%u %s%s list=%u ", c_shape,
+			c_family == AF_INET6 ? "v6-" : "", tag,
+			tp->rtx_recent_len);
 	n = 0;
 	for (skb = rtx_first(sk); skb && n < 64; skb = rtx_next(sk, skb), n++)
 		len += scnprintf(buf + len, sizeof(buf) - len, "%c",
