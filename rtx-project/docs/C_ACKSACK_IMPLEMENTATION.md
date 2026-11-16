@@ -11,8 +11,8 @@ C는 ACK·SACK 수신 경로(`net/ipv4/tcp_input.c`)가 재전송 큐를 `rtx_*`
 | V1 호출부 전환 (12곳, `tcp_sacktag_bsearch` 제거) | #6 (`7b84f6b`) | main 머지 |
 | `tcp_ack()` prefetch → `rtx_prefetch` | #12 (A) | main 머지, C 확인 |
 | SACK shift/merge 트랜잭션 (`tcp_shifted_skb`) | #17 (A·B 작성) | main 머지. C 사후 리뷰·하이브리드 실행 확인 완료 |
-| 호출부 카운터 9개 | `d1211ee77` | PR 예정 ([문서](pr/c-ack-sack-stats-find-cover.md)) |
-| SACK 검색 경계 sweep | `a4867812c` | 같은 PR |
+| 호출부 카운터 9개 | `a91e00d8a` | PR 예정 ([문서](pr/c-ack-sack-stats-find-cover.md)) |
+| SACK 검색 경계 sweep | `d3625b744` | 같은 PR |
 | D 시나리오(#19) 리뷰 | — | 실행 결과와 RENEGING peer 수정 제안 전달 예정 |
 | #15 공동 경계 회귀 | — | SACK 병합 경계·검색 경계만 확인. split 결합·힌트·DSACK 조합 남음 |
 

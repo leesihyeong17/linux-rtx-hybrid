@@ -19,7 +19,7 @@ PR: 생성 전 (만든 뒤 링크 갱신). 브랜치 `c/stats-v2`.
 
 ## 2. 최종 변경
 
-### 2.1 카운터 (`d1211ee77`, tcp_input.c +13/−1)
+### 2.1 카운터 (`a91e00d8a`, tcp_input.c +13/−1)
 
 | 카운터 | 위치 (main `73747d3f1` + 이 PR 기준 행) | 세는 것 |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ PR: 생성 전 (만든 뒤 링크 갱신). 브랜치 `c/stats-v2`.
 
 구조 이벤트(삽입·삭제·승격·`find_cover` 방문 노드)는 기존처럼 A의 어댑터 안에서 센다. C는 "ACK/SACK 처리가 왜 순회했는가"만 센다 (11/11 분담 합의).
 
-### 2.2 sweep 자체 테스트 (`a4867812c`, tcp_rtx_selftest.c +89)
+### 2.2 sweep 자체 테스트 (`d3625b744`, tcp_rtx_selftest.c +89)
 
 `st_find_cover_sweep(base)`를 base 3가지로 부른다: 1000, 큐 안에서 wrap(`0xfffffd00`), 첫 skb가 wrap을 가로지름(`0xffffffe0`).
 
