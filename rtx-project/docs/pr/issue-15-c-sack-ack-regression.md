@@ -2,8 +2,8 @@
 
 이슈: https://github.com/leesihyeong17/linux-rtx-hybrid/issues/15
 PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/23. 브랜치 `c/sack-ack-regression`.
-기반: B의 `test/b-sack-boundary-regression`(#20, `0ee4a1a71`). 이 PR은 B의 overlay·검사기를 그대로 쓰므로 #20 위에 쌓는다.
-실행 기준: 위 브랜치에 main `cc843d480`과 C 카운터 PR #21(`8bab2171d`까지)을 합친 트리. fixture가 #21의 shift·ACK 카운터를 읽기 때문이다.
+기반: main. 처음에는 B의 `test/b-sack-boundary-regression`(#20, `0ee4a1a71`) 위에 쌓았다. B의 overlay·검사기를 그대로 쓰기 때문이다. #20이 11/16 머지된 뒤 base를 main(`e4de76000`)으로 바꿨다.
+실행 기준: 1·2차는 #20 브랜치에 main `cc843d480`과 C 카운터 PR #21(`8bab2171d`까지)을 합친 트리다. fixture가 #21의 shift·ACK 카운터를 읽기 때문이다. 3차는 #25 위, 4차는 main(`e4de76000`) 위에서 실행했다.
 
 ## 1. 문제와 범위
 
@@ -22,7 +22,9 @@ B는 #20에서 SACK 분할 경로를 검증했지만, 선형 skb fixture라 shif
 
 2차(같은 날)에서 1차의 미검증 경로를 추가했다: `lost_skb_hint` 병합, 재전송 재분할, RACK 시간 기반 손실, RACK reorder·TLP·RTO 타이머 핸들러, IPv6 소켓, 2 CPU 부팅.
 
-3차(같은 날 저녁)에서 `retransmit_skb_hint` 병합·삭제와 in-window(OFO) DSACK 시나리오를 추가했다. 실제 타이머와 2 CPU에서 도는 8연결 손실·재정렬 스트레스(`c_stress.c`)도 만들었다. 이 전부를 B의 #25 코어(`TCP_RTX_CACHE`·`TCP_RTX_TAIL`) 위에서 5개 구성으로 실행했다(4.4절).
+3차(같은 날 저녁)에서 `retransmit_skb_hint` 병합·삭제와 in-window(OFO) DSACK 시나리오를 추가했다. 실제 타이머와 2 CPU에서 도는 8연결 손실·재정렬 스트레스(`c_stress.c`)도 만들었다. 이 전부를 B의 #25 코어(`TCP_RTX_CACHE`·`TCP_RTX_TAIL`) 위에서 5개 구성으로 실행했다(4.3절).
+
+4차(#20 머지 뒤)에서 main 기준으로 같은 실행을 반복했다. 이때 스트레스 수신기의 idle 한도 결함을 찾아 고쳤다(4.5절, 6절).
 
 ## 2. 최종 변경
 
@@ -177,9 +179,24 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
 2. HYBRID K=16의 find_cover는 LIST 구간에서 최대 16노드를 선형 탐색한다(sweep 평균 7.72, RB 2.97). #16 측정에서 참고할 값이다. 3차 스트레스(K=16+TAIL)에서는 find_cover 320회에 tree 19·list 852단계였다.
 3. `undo_retrans`는 실패한 재전송 시도도 센다(`tcp_retransmit_skb`가 `__tcp_retransmit_skb` 결과와 무관하게 더한다). 재전송 힌트 시나리오에서 경로 실패를 쓸 때 보였다.
 
+### 4.5 4차: #20 머지 뒤 main 기준
+
+기준: main(`e4de76000`, #20 머지)에 이 PR(`01acce2b2`)을 합친 트리(`6f3f588ba`)다. #25는 포함하지 않는다. KASAN·DEBUG·STATS on이다.
+
+| 구성 | fixture (C 포함) | 자체 테스트 | 스트레스 (수정 후, 2 CPU, 8연결 × 1 MiB) | RB 대조 |
+| --- | --- | --- | --- | --- |
+| HYBRID K=16 | 3716 / 0 | 749 / 0 | PASS, RTO 98·TLP 21 | k16 139단계 차이 0 |
+| HYBRID K=1 | 2387 / 0 | 674 / 0 | PASS, RTO 86·TLP 28 | k1 128단계 차이 0 |
+| RB (참조) | 5151 / 0 | 556 / 0 | PASS, RTO 82·TLP 33 | — |
+
+- 모든 실행에서 KASAN 0, WARNING 0이다. 스트레스의 shift 카운터는 MIB와 같았다.
+- hole-fill UAF 변이 커널은 main 위에서도 KASAN `use-after-free in tcp_sacktag_walk`로 거부됐다.
+- 첫 실행에서 K=16 스트레스가 실패했다(8연결 중 1개). 원인은 수신기(테스트 도구)의 idle 한도였고, 커널 결함이 아니었다(6절). 한도를 고친 뒤 세 커널 모두 다시 돌려 통과했다.
+- 확인용으로, 버스트 확률을 0.3%에서 1%로 올린 진단 수신기도 고친 한도로 K=16에서 돌렸다. 120초가 넘는 무응답 구간이 여러 번 생겼지만 모든 연결이 커널 RTO로 복구해 PASS였다(`diag/diag-b10-fixed-hyb16.log`, 884초, 최대 연속 drop 16).
+
 ## 5. 증거
 
-로컬 전용(git 무시). 3차는 `rtx-project/.work/c25-20261116-2015/`, 2차는 `c15b-20261116-1531/`, 1차는 `c15-20261116-1506/`(C 작업 환경)에 있다. 아래 표는 2차 기준이고, 3차 디렉터리도 같은 구성에 `stress-*.log`·`stress-*.json`·`*.rtx-config.txt`·`pr25-sha.txt`를 더했다. 3차 캡처는 `report/hyb16-tail.png`, `hyb1-tail.png`, `rb-tail.png`, `stress-hyb16-tail.png`이다. PR에는 캡처를 첨부한다.
+로컬 전용(git 무시). 4차는 `rtx-project/.work/c20-20261116-2126/`, 3차는 `rtx-project/.work/c25-20261116-2015/`, 2차는 `c15b-20261116-1531/`, 1차는 `c15-20261116-1506/`(C 작업 환경)에 있다. 아래 표는 2차 기준이고, 3차 디렉터리도 같은 구성에 `stress-*.log`·`stress-*.json`·`*.rtx-config.txt`·`pr25-sha.txt`를 더했다. 3차 캡처는 `report/hyb16-tail.png`, `hyb1-tail.png`, `rb-tail.png`, `stress-hyb16-tail.png`이다. PR에는 캡처를 첨부한다. 4차 디렉터리에는 수정 전 스트레스 실패 원본(`stress-hyb16.log`), 수정 후 재실행(`stress2-*.log`·`stress2-*.json`·`harness/c_stress-v2.c`·`stress-initramfs-v2.cpio`), 진단 수신기와 그 로그(`diag/`), 캡처(`report/hyb16.png`, `hyb1.png`, `stress2-hyb16.png`, `diag-old-limit.png`)가 있다.
 
 | 주장 | 파일 |
 | --- | --- |
@@ -197,12 +214,13 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
 
 ## 6. 실패와 수정
 
-모두 fixture 준비 문제였다. production 코드는 바꾸지 않았다.
+모두 테스트 도구 쪽 문제였다(fixture 준비 2건, 스트레스 수신기 1건). production 코드는 바꾸지 않았다.
 
 | 실패 | 원인 | 수정·재실행 |
 | --- | --- | --- |
 | 재전송 단계에서 `divide error` in `__tcp_select_window` (`dev-failures/serial-k4-no-rcvmss.log` 317행) | 연결되지 않은 fixture 소켓의 `icsk_ack.rcv_mss`가 0이다. 재전송 헤더를 만들 때 0으로 나눈다 | `rcv_mss`·수신 창을 설정. 재실행 통과 |
 | recovery 단계에서 `b_valid`·구조 검사 실패, 길이 0 skb 3개(`serial-k4-no-gsosegs.log` 320·321행, 24 failures) | `sk_gso_max_segs`=0이라 `tcp_tso_segs()`가 0을 돌려준다. 그래서 `tcp_retransmit_skb(segs=0)` → `tcp_fragment(len=0)`가 된다. 연결 소켓은 route가 1 이상으로 설정하므로 실제로는 생기지 않는다 | `sk_gso_max_segs`/`size` 설정. 재실행 통과 |
+| 4차 K=16 스트레스에서 conn 4가 179180바이트에서 멈춤. 995초 뒤 `TCPAbortOnTimeout` 1 (`c20-*/stress-hyb16.log` 703행) | 수신기가 120초 동안 패킷이 없으면 종료했다. 버스트 drop이 이어지면 커널은 같은 head를 지수 백오프로 재전송한다. 그 간격이 `TCP_RTO_MAX`(120초)에 타이머 오차를 더한 만큼 벌어지면, 수신기가 다음 재전송보다 먼저 끝난다. 진단 수신기(`diag/diag-b10-1.log`)로 재현해 보니 conn 2는 올바른 head(offset 836730)를 0.2초에서 106초 간격까지 두 배씩 늘려 재전송했다. 그 재전송은 수신기가 연속으로 drop했다. `/proc/net/tcp`에는 retrnsmt 10과 rto 120초가 보였다 | idle 한도를 300초로 올렸다. 종료할 때 `/proc/net/tcp`를 남기게 했다(`c_stress.c`). 세 커널 재실행 통과, 버스트 1% 진단도 통과 |
 
 두 로그는 수정 전 harness(`dev-failures/*.patch`)로 다시 실행해 보존했다. 처음 발견했을 때의 로그는 개발 중 덮어써서 남아 있지 않다.
 
@@ -217,5 +235,5 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
   - gcc 9.4·ARM64(D).
   - IPv6 패킷 수준 스트레스(fixture 수준은 완료).
   - 스트레스는 확률 기반이라 특정 경계 조합을 보장하지 않는다. 경계 조합 보장은 fixture가 맡는다.
-- #20 머지 뒤 이 PR의 base를 main으로 바꾼다. #21(카운터 연결)은 11/16 머지됐다. #20 머지 뒤 main 기준으로 같은 실행을 한 번 더 확인한다.
+- #20·#21은 11/16 머지됐다. 이 PR의 base를 main으로 바꿨고, main 기준 재실행(4차)을 마쳤다.
 - #15 매트릭스에서 C 담당 행은 위 미검증을 빼고 채웠다. 이슈 종료는 B·A와 합의해 판단한다.
