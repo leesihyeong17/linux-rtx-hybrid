@@ -22,6 +22,8 @@ B는 #20에서 SACK 분할 경로를 검증했지만, 선형 skb fixture라 shif
 
 2차(같은 날)에서 1차의 미검증 경로를 추가했다: `lost_skb_hint` 병합, 재전송 재분할, RACK 시간 기반 손실, RACK reorder·TLP·RTO 타이머 핸들러, IPv6 소켓, 2 CPU 부팅.
 
+3차(같은 날 저녁)에서 `retransmit_skb_hint` 병합·삭제와 in-window(OFO) DSACK 시나리오를 추가했다. 실제 타이머와 2 CPU에서 도는 8연결 손실·재정렬 스트레스(`c_stress.c`)도 만들었다. 이 전부를 B의 #25 코어(`TCP_RTX_CACHE`·`TCP_RTX_TAIL`) 위에서 5개 구성으로 실행했다(4.4절).
+
 ## 2. 최종 변경
 
 | 파일 | 내용 |
@@ -30,7 +32,8 @@ B는 #20에서 SACK 분할 경로를 검증했지만, 선형 skb fixture라 shif
 | `case_cshift.c` (신규) | 항목 1. 경계 partial→full(`c_shift_boundary`), 현재+다음 동시 병합 뒤 순회 계속(`c_shift_pair`, cur=1~4) |
 | `case_cack.c` (신규) | 항목 2~4. 부분·누적 ACK(`cleanup`), 손실 표시·재전송·DSACK(`recovery`), 재정렬(`reorder`), 두 번째 split 실패 뒤 ACK(`split_failure`), 오라클 음성 대조(`negative`) |
 | `c_diff_states.py`, `test_c_diff_states.py` (신규) | 하이브리드 로그와 RB 참조 로그의 `CSTATE` 비교와 그 단위 테스트(불일치·누락 거부 포함) |
-| `case_cx.c` (신규, 2차) | lost 힌트 병합(`c_lost_hint_merge`), 재전송 재분할(`c_rexmit_split`: TREE 끝·LIST 첫·LIST 끝), RACK 시간 기반 손실(`c_rack_loss`), RACK reorder 타이머(`c_rack_timer`), TLP(`c_tlp`), RTO(`c_rto`), 그리고 주요 시나리오 6개를 IPv6 소켓으로 반복 |
+| `case_cx.c` (신규, 2·3차) | lost 힌트 병합(`c_lost_hint_merge`), 재전송 재분할(`c_rexmit_split`: TREE 끝·LIST 첫·LIST 끝), 재전송 힌트 병합·삭제(`c_rexmit_hint_merge`), in-window DSACK(`c_ofo_dsack`), RACK 시간 기반 손실(`c_rack_loss`), RACK reorder 타이머(`c_rack_timer`), TLP(`c_tlp`), RTO(`c_rto`), 그리고 주요 시나리오 7개를 IPv6 소켓으로 반복 |
+| `runtime/c_stress.c`, `runtime/c_stress_summary.py` (신규, 3차) | guest init. 커널 TCP 송신 8연결(스레드)에 대해 tun 쪽 수신 TCP가 2% 손실, 8세그먼트 버스트 손실, 2% 재정렬, DSACK(OFO 포함)을 만든다. 모든 payload 바이트와 FIN 종료를 검사한다. 요약기는 판정, TcpExt 증가분, rtx 카운터와 MIB의 일치를 본다 |
 | `apply_overlay.py` | `case_c*`가 있으면 `c_common.h`를 함께 복사하고, `tcp_input.c`에 `c_test_ack()`(`tcp_mstamp_refresh` 뒤 `tcp_ack(sk, skb, FLAG_SLOWPATH)`)와 `c_test_enter_recovery()`(`tcp_enter_recovery`) wrapper를 붙인다 |
 
 fixture 소켓은 B의 `b_socket()`으로 만든다. 그 위에 연결된 소켓이 갖는 최소 상태를 채운다.
@@ -144,14 +147,39 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
 - **IPv6**: cleanup·recovery·boundary·pair(cur=2)·lost 힌트 병합·RTO를 `AF_INET6` 소켓으로 반복했다(`CSTATE ... v6-` 태그). RB 대조에 포함된다.
 - 타이머는 timer wheel이 아니라 핸들러 본문을 직접 실행했다. 소켓은 fixture가 소유(lock_sock)한 상태라 실제 타이머가 `tcp_release_cb`로 미뤄 실행하는 경우와 같은 문맥이다.
 
-### 4.3 관찰 (하이브리드 결함 아님, RB와 동일)
+### 4.3 3차: #25 코어 위 실행과 실제 타이머·2 CPU 스트레스
+
+기준: main(`ff2325b01`, #21 머지) + #20 + #25(`4e204ffda`)를 합친 트리(`71204445a`). 같은 harness(`868bf6dba`)를 썼고, 모두 KASAN·DEBUG·STATS on이다.
+
+| 구성 | fixture (C 포함) | 자체 테스트 | 스트레스 (2 CPU, 8연결 × 1 MiB) | RB 대조 |
+| --- | --- | --- | --- | --- |
+| HYBRID K=16 + TAIL | 3716 / 0 | 1352 / 0 | PASS, RTO 82·TLP 29·shift 163/merge 1108·DSACK 68(OFO 1) | k16 139단계 차이 0 |
+| HYBRID K=1 + TAIL | 2387 / 0 | 1217 / 0 | PASS, RTO 79·TLP 30·merge 1282·promote 7439 | k1 128단계 차이 0 |
+| RB (CACHE off, 참조) | 5151 / 0 | 557 / 0 | PASS, RTO 52·TLP 23 | — |
+| RB + CACHE + TAIL | 5151 / 0 | 837 / 0 | PASS, RTO 76·TLP 29 | k16·k1 차이 0 |
+| HYBRID K=16, TAIL off(#25 기본) | 3716 / 0 | 1352 / 0 | PASS, RTO 67·TLP 20 | k16 차이 0 |
+
+- 모든 구성에서 KASAN 0, WARNING 0이다. 스트레스의 shift 카운터는 MIB(`TCPSackShifted/Merged/ShiftFallback`)와 같았다.
+- 스트레스에서는 손실을 커널의 실제 타이머와 손실 감지가 복구했다. RTO·TLP·RACK reorder 타이머는 timer wheel에서 발화했다. ACK 처리(tun write → softirq)와 송신 스레드는 2개 CPU에서 동시에 돌았다. 모든 연결이 1 MiB를 바이트 단위로 정확히 전달했고 FIN으로 종료했다.
+- 스트레스의 소요 시간(20~81초)은 QEMU TCG·KASAN 위의 값이고 무작위 손실 패턴도 매번 달라서 성능 비교가 아니다.
+- 새 fixture 시나리오:
+  - **재전송 힌트 병합·삭제**:
+    1. skb 0을 ACK한다. skb 2(TREE 끝)는 SACK, skb 1·3(LIST 첫)은 lost다.
+    2. 재전송 루프가 skb 1을 보낸 뒤, 경로 실패로 skb 3에서 멈춰 힌트가 skb 3에 남는다.
+    3. skb 3을 SACK하면 skb 2에 병합되고, 힌트가 skb 2로 옮겨진다.
+    4. skb 2를 지우는 누적 ACK 뒤에는 힌트가 해제됐다가, 다음 재전송 루프에서 새 머리로 다시 잡힌다.
+  - **OFO DSACK**: 재전송된 LIST 첫 skb 절반에 대한 in-window DSACK이다. `TCPDSACKOfoRecv`+1, undo_retrans 감소, retrans_out 0이 됐다. 다음으로 TREE 끝에서 LIST 첫으로 넘어가는 dup 블록도 넣었는데, skb 2를 처음 SACK하는 것과 동시에 일어나도록 했다.
+- `C_QUIET` 모드(RACK off, reordering 127)는 자동 손실 표시가 힌트를 옮기지 않게 해서 병합 효과만 보기 위한 것이다.
+
+### 4.4 관찰 (하이브리드 결함 아님, RB와 동일)
 
 1. 같은 DSACK을 두 번 받으면 `undo_retrans`가 두 번 줄고(4→3) `delivered`도 두 번 늘었다. mainline `tcp_check_dsack()`은 어떤 구간을 이미 DSACK으로 셌는지 기억하지 않는다. RB 참조와 상태가 같아 hybrid 문제는 아니다. 정상 수신자는 같은 DSACK을 반복하지 않는다.
-2. HYBRID K=16의 find_cover는 LIST 구간에서 최대 16노드를 선형 탐색한다(sweep 평균 7.72, RB 2.97). #16 측정에서 참고할 값이다.
+2. HYBRID K=16의 find_cover는 LIST 구간에서 최대 16노드를 선형 탐색한다(sweep 평균 7.72, RB 2.97). #16 측정에서 참고할 값이다. 3차 스트레스(K=16+TAIL)에서는 find_cover 320회에 tree 19·list 852단계였다.
+3. `undo_retrans`는 실패한 재전송 시도도 센다(`tcp_retransmit_skb`가 `__tcp_retransmit_skb` 결과와 무관하게 더한다). 재전송 힌트 시나리오에서 경로 실패를 쓸 때 보였다.
 
 ## 5. 증거
 
-로컬 전용(git 무시). 최종 실행은 `rtx-project/.work/c15b-20261116-1531/`, 1차 실행은 `c15-20261116-1506/`(C 작업 환경)이다. PR에는 아래 캡처를 첨부한다.
+로컬 전용(git 무시). 3차는 `rtx-project/.work/c25-20261116-2015/`, 2차는 `c15b-20261116-1531/`, 1차는 `c15-20261116-1506/`(C 작업 환경)에 있다. 아래 표는 2차 기준이고, 3차 디렉터리도 같은 구성에 `stress-*.log`·`stress-*.json`·`*.rtx-config.txt`·`pr25-sha.txt`를 더했다. 3차 캡처는 `report/hyb16-tail.png`, `hyb1-tail.png`, `rb-tail.png`, `stress-hyb16-tail.png`이다. PR에는 캡처를 첨부한다.
 
 | 주장 | 파일 |
 | --- | --- |
@@ -183,10 +211,11 @@ B가 공유한 계약과 이번 결과는 서로 맞다.
 ## 7. 남은 작업
 
 - **B와 공동 확인**: 재전송 재분할(TREE 끝·LIST 첫·LIST 끝, recovery·RTO·TLP)은 실행했고, 회계·힌트·구조는 RB와 같았다. B 쪽 split 의미(PSH/FIN 이동, payload, tsorted 위치) 기준을 이 시나리오에 적용할지 B와 정한다.
-- 아직 겨냥하지 않은 경로:
-  - `retransmit_skb_hint`가 병합·삭제되는 경우
-  - OFO DSACK
-  - 실제 timer wheel 발화와 경합(이번에는 핸들러 본문만 실행)
-- 환경 확대: gcc 9.4·ARM64(D), 실제 다중 CPU 경합(2 CPU 부팅은 했지만 fixture는 한 CPU에서 순차 실행), 실제 NIC는 미실행이다. IPv6는 fixture 수준만 했고 패킷 시험은 하지 않았다.
+- 3차로 채운 것: 재전송 힌트 병합·삭제, OFO DSACK, 실제 타이머 발화(스트레스), 2 CPU에서 ACK·송신 동시 실행(스트레스), #25 CACHE·TAIL 구성.
+- 남은 것:
+  - 실제 NIC(오프로드·드라이버). QEMU에서는 재현할 수 없어 실기 환경이 필요하다(D).
+  - gcc 9.4·ARM64(D).
+  - IPv6 패킷 수준 스트레스(fixture 수준은 완료).
+  - 스트레스는 확률 기반이라 특정 경계 조합을 보장하지 않는다. 경계 조합 보장은 fixture가 맡는다.
 - #20 머지 뒤 이 PR의 base를 main으로 바꾼다. #21(카운터 연결)은 11/16 머지됐다. #20 머지 뒤 main 기준으로 같은 실행을 한 번 더 확인한다.
 - #15 매트릭스에서 C 담당 행은 위 미검증을 빼고 채웠다. 이슈 종료는 B·A와 합의해 판단한다.
