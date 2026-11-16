@@ -1,6 +1,6 @@
 # A: shift·trim·collapse 계약 문서화 (PR #17 반영)
 
-작성: 2026-11-16 · 담당: A · PR: (생성 후 링크 추가) · 관련 이슈: 없음 (PR #17, #14 후속)
+작성: 2026-11-16 · 담당: A · PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/22 · 관련 이슈: 없음 (PR #17, #14 후속)
 
 ## 1. 문제와 범위
 
