@@ -329,6 +329,102 @@ static void st_hybrid_ordered(void)
 }
 #endif
 
+/* Reference lookup for the sweep: plain in-order walk, no shortcuts. */
+static struct sk_buff *st_cover_ref(struct sock *sk, u32 seq)
+{
+	struct sk_buff *skb;
+
+	rtx_walk(skb, sk)
+		if (!before(seq, TCP_SKB_CB(skb)->seq) &&
+		    before(seq, TCP_SKB_CB(skb)->end_seq))
+			return skb;
+	return NULL;
+}
+
+/* SACK lookup sweep (C, tcp_sacktag_skip). Compare rtx_find_cover() with
+ * the reference walk for every seq around the queue. Uneven sizes and a
+ * hole after every third skb, so each boundary kind (start, end-1, end,
+ * hole, TREE/LIST edge) is hit. Also report visited nodes per lookup.
+ */
+#ifdef CONFIG_TCP_RTX_HYBRID
+/* Keep the TREE non-empty (TREE/LIST edge covered) for K up to 60. */
+#define ST_SWEEP_N	clamp_t(int, CONFIG_TCP_RTX_RECENT_MAX + 4, 12, 64)
+#else
+#define ST_SWEEP_N	12
+#endif
+static void st_find_cover_sweep(u32 base, const char *what)
+{
+	struct sock *sk = st_sock();
+	u32 seq = base, end, s;
+	unsigned int steps, max_steps = 0, lookups = 0, bad = 0, ctl = 0;
+	unsigned long sum_steps = 0;
+	struct sk_buff *skb;
+	int i, round;
+
+	if (!sk) {
+		CHECK(0, "sweep setup");
+		return;
+	}
+	for (i = 0; i < ST_SWEEP_N; i++) {
+		u32 len = 40 + (i % 4) * 20;
+
+		skb = st_skb(seq, seq + len);
+		if (!skb) {
+			CHECK(0, "sweep alloc");
+			st_free(sk);
+			return;
+		}
+		rtx_append(sk, skb);
+		seq += len + ((i % 3) == 2 ? 30 : 0);
+	}
+	CHECK(rtx_validate_structure(sk), "sweep structure");
+#ifdef CONFIG_TCP_RTX_HYBRID
+	if (!tcp_sk(sk)->rtx_tree_first)
+		pr_info("rtx_selftest: sweep %s: TREE empty (K >= %d), TREE/LIST edge not covered\n",
+			what, ST_SWEEP_N);
+#endif
+	/* round 0: full queue; 1: two head skbs ACKed; 2: TREE last removed */
+	for (round = 0; round < 3; round++) {
+		if (round == 1) {
+			for (i = 0; i < 2; i++) {
+				skb = rtx_first(sk);
+				rtx_unlink(sk, skb);
+				kfree_skb(skb);
+			}
+		}
+#ifdef CONFIG_TCP_RTX_HYBRID
+		if (round == 2 && tcp_sk(sk)->rtx_tree_last) {
+			skb = tcp_sk(sk)->rtx_tree_last;
+			rtx_unlink(sk, skb);
+			kfree_skb(skb);
+		}
+#endif
+		CHECK(rtx_validate_structure(sk), "sweep round %d structure",
+		      round);
+		end = TCP_SKB_CB(rtx_last(sk))->end_seq + 3;
+		s = TCP_SKB_CB(rtx_first(sk))->seq - 3;
+		for (; s != end; s++) {
+			skb = __rtx_find_cover(sk, s, &steps, NULL);
+			if (skb != st_cover_ref(sk, s) && bad++ < 5)
+				pr_err("rtx_selftest: sweep %s round %d seq +%u\n",
+				       what, round, s - base);
+			/* negative control: off-by-one reference must differ */
+			if (skb != st_cover_ref(sk, s + 1))
+				ctl++;
+			lookups++;
+			sum_steps += steps;
+			if (steps > max_steps)
+				max_steps = steps;
+		}
+	}
+	CHECK(!bad, "find_cover sweep %s: %u mismatches", what, bad);
+	CHECK(ctl, "find_cover sweep %s: control never differed", what);
+	pr_info("rtx_selftest: find_cover sweep %s lookups=%u mismatches=%u control_diff=%u avg_steps=%lu.%02lu max_steps=%u\n",
+		what, lookups, bad, ctl, sum_steps / lookups,
+		sum_steps * 100 / lookups % 100, max_steps);
+	st_free(sk);
+}
+
 static int __init rtx_selftest_init(void)
 {
 	st_split_positions(1000);
@@ -337,6 +433,9 @@ static int __init rtx_selftest_init(void)
 	/* the first skb itself crosses the wrap */
 	st_split_positions(0xffffffe0);
 	st_split_single();
+	st_find_cover_sweep(1000, "base");
+	st_find_cover_sweep(0xfffffd00, "wrap-inside");
+	st_find_cover_sweep(0xffffffe0, "wrap-first");
 #ifdef CONFIG_TCP_RTX_HYBRID
 	st_hybrid();
 	st_hybrid_ordered();
