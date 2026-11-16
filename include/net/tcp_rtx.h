@@ -247,7 +247,7 @@ done:
 static inline void __rtx_tree_insert(struct sock *sk, struct sk_buff *skb)
 {
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);
-#ifdef CONFIG_TCP_RTX_HYBRID
+#ifdef CONFIG_TCP_RTX_CACHE
 	if (!tcp_sk(sk)->rtx_tree_first ||
 	    before(TCP_SKB_CB(skb)->seq,
 		   TCP_SKB_CB(tcp_sk(sk)->rtx_tree_first)->seq))
@@ -256,6 +256,30 @@ static inline void __rtx_tree_insert(struct sock *sk, struct sk_buff *skb)
 	    after(TCP_SKB_CB(skb)->seq,
 		  TCP_SKB_CB(tcp_sk(sk)->rtx_tree_last)->seq))
 		tcp_sk(sk)->rtx_tree_last = skb;
+#endif
+}
+
+/* Only for a sequence greater than the current TREE maximum. */
+static inline void __rtx_tree_append(struct sock *sk, struct sk_buff *skb)
+{
+#ifdef CONFIG_TCP_RTX_TAIL
+	struct tcp_sock *tp = tcp_sk(sk);
+	struct sk_buff *last = tp->rtx_tree_last;
+	struct rb_node *parent = last ? &last->rbnode : NULL;
+	struct rb_node **link = parent ? &parent->rb_right :
+					&sk->tcp_rtx_queue.rb_node;
+
+#ifdef CONFIG_TCP_RTX_DEBUG
+	WARN_ON_ONCE(*link || (last &&
+		     !after(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(last)->seq)));
+#endif
+	rb_link_node(&skb->rbnode, parent, link);
+	rb_insert_color(&skb->rbnode, &sk->tcp_rtx_queue);
+	if (!tp->rtx_tree_first)
+		tp->rtx_tree_first = skb;
+	tp->rtx_tree_last = skb;
+#else
+	__rtx_tree_insert(sk, skb);
 #endif
 }
 
@@ -270,8 +294,7 @@ static inline void __rtx_limit(struct sock *sk)
 	skb = __rtx_list_first(sk);
 	list_del(&skb->list);
 	tp->rtx_recent_len--;
-	/* General ordered insertion also performs RB balancing. */
-	__rtx_tree_insert(sk, skb);
+	__rtx_tree_append(sk, skb);
 	rtx_stat_inc(RTX_STAT_PROMOTE);
 }
 #endif
@@ -279,15 +302,19 @@ static inline void __rtx_limit(struct sock *sk)
 static inline void __rtx_unlink(struct sock *sk, struct sk_buff *skb,
 				 enum rtx_domain domain)
 {
-#ifdef CONFIG_TCP_RTX_HYBRID
+#ifdef CONFIG_TCP_RTX_CACHE
 	struct tcp_sock *tp = tcp_sk(sk);
+#endif
 
+#ifdef CONFIG_TCP_RTX_HYBRID
 	if (domain == RTX_DOMAIN_LIST) {
 		list_del(&skb->list);
 		tp->rtx_recent_len--;
 		rtx_stat_inc(RTX_STAT_UNLINK_LIST);
 		goto counted;
 	}
+#endif
+#ifdef CONFIG_TCP_RTX_CACHE
 	if (tp->rtx_tree_first == skb)
 		tp->rtx_tree_first = skb_rb_next(skb);
 	if (tp->rtx_tree_last == skb)
@@ -309,6 +336,8 @@ static inline void rtx_init(struct sock *sk)
 #ifdef CONFIG_TCP_RTX_HYBRID
 	INIT_LIST_HEAD(&tcp_sk(sk)->rtx_recent);
 	tcp_sk(sk)->rtx_recent_len = 0;
+#endif
+#ifdef CONFIG_TCP_RTX_CACHE
 	tcp_sk(sk)->rtx_tree_first = NULL;
 	tcp_sk(sk)->rtx_tree_last = NULL;
 #endif
@@ -342,6 +371,8 @@ static inline struct sk_buff *rtx_first(const struct sock *sk)
 	rtx_assert_no_txn(sk);
 #ifdef CONFIG_TCP_RTX_HYBRID
 	return tcp_sk(sk)->rtx_tree_first ?: __rtx_list_first(sk);
+#elif defined(CONFIG_TCP_RTX_CACHE)
+	return tcp_sk(sk)->rtx_tree_first;
 #else
 	return skb_rb_first(&sk->tcp_rtx_queue);
 #endif
@@ -350,7 +381,7 @@ static inline struct sk_buff *rtx_first(const struct sock *sk)
 /* Highest sequence skb, or NULL if the queue is empty. */
 static inline struct sk_buff *rtx_last(const struct sock *sk)
 {
-#ifdef CONFIG_TCP_RTX_HYBRID
+#ifdef CONFIG_TCP_RTX_CACHE
 	const struct tcp_sock *tp = tcp_sk(sk);
 #endif
 
@@ -358,6 +389,8 @@ static inline struct sk_buff *rtx_last(const struct sock *sk)
 #ifdef CONFIG_TCP_RTX_HYBRID
 	if (!list_empty(&tp->rtx_recent))
 		return list_last_entry(&tp->rtx_recent, struct sk_buff, list);
+#endif
+#ifdef CONFIG_TCP_RTX_CACHE
 	return tp->rtx_tree_last;
 #else
 	return skb_rb_last(&sk->tcp_rtx_queue);
@@ -460,7 +493,7 @@ static inline void rtx_append(struct sock *sk, struct sk_buff *skb)
 	tcp_sk(sk)->rtx_recent_len++;
 	__rtx_limit(sk);
 #else
-	__rtx_tree_insert(sk, skb);
+	__rtx_tree_append(sk, skb);
 #endif
 	rtx_stat_inc(RTX_STAT_INSERT_APPEND);
 	__rtx_count_link(sk);
@@ -487,6 +520,8 @@ static inline void rtx_replace(struct sock *sk, struct sk_buff *old,
 		list_replace(&old->list, &new->list);
 		return;
 	}
+#endif
+#ifdef CONFIG_TCP_RTX_CACHE
 	if (tcp_sk(sk)->rtx_tree_first == old)
 		tcp_sk(sk)->rtx_tree_first = new;
 	if (tcp_sk(sk)->rtx_tree_last == old)
@@ -537,14 +572,16 @@ static inline void rtx_shift_commit(struct sock *sk,
 static inline bool rtx_validate_structure(struct sock *sk)
 {
 	struct sk_buff *skb, *prev = NULL;
-#ifdef CONFIG_TCP_RTX_HYBRID
+#ifdef CONFIG_TCP_RTX_CACHE
 	struct tcp_sock *tp = tcp_sk(sk);
+#endif
+#ifdef CONFIG_TCP_RTX_HYBRID
 	unsigned int count = 0;
 #endif
 
 	if (tcp_sk(sk)->rtx_txn_open)
 		return false;
-#ifdef CONFIG_TCP_RTX_HYBRID
+#ifdef CONFIG_TCP_RTX_CACHE
 	if (tp->rtx_tree_first != skb_rb_first(&sk->tcp_rtx_queue) ||
 	    tp->rtx_tree_last != skb_rb_last(&sk->tcp_rtx_queue))
 		return false;
