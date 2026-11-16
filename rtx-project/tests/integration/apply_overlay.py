@@ -50,7 +50,25 @@ void b_test_mark_head_lost(struct sock *sk)
 \ttcp_mark_head_lost(sk, 1, 0);
 }
 '''
-    input_file.write_text(input_modified)
+if any(p.stem == 'case_sack' for p in cases):
+    input_modified += '''\nstruct sk_buff *b_test_sack_walk(struct sock *sk, u32 start, u32 end);
+struct sk_buff *b_test_sack_walk(struct sock *sk, u32 start, u32 end)
+{
+\tstruct rate_sample rate = {};
+\tstruct tcp_sacktag_state state = {
+\t\t.reord = tcp_sk(sk)->snd_nxt,
+\t\t.rate = &rate,
+\t\t.mss_now = 1000,
+\t};
+\tstruct sk_buff *skb;
+
+\tif (!tcp_sk(sk)->sacked_out)
+\t\ttcp_highest_sack_reset(sk);
+\tskb = tcp_sacktag_skip(rtx_first(sk), sk, start);
+\treturn tcp_sacktag_walk(skb, sk, NULL, &state, start, end, false);
+}
+'''
+input_file.write_text(input_modified)
 patch = ''.join(difflib.unified_diff(original.splitlines(True), modified.splitlines(True), fromfile='a/net/ipv4/tcp_output.c', tofile='b/net/ipv4/tcp_output.c'))
 patch += ''.join(difflib.unified_diff(input_original.splitlines(True), input_modified.splitlines(True), fromfile='a/net/ipv4/tcp_input.c', tofile='b/net/ipv4/tcp_input.c'))
 (evidence / 'instrumentation.patch').write_text(patch)

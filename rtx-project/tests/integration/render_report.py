@@ -20,6 +20,8 @@ metadata = '\n'.join([
     (run / 'environment.txt').read_text().strip(),
 ])
 patterns = {
+    'sack': ('BVERIFY sack ',),
+    'tsorted': ('BVERIFY tsorted ',),
     'hybrid': ('BVERIFY hybrid ',),
     'failures': ('failure-boundary=',),
     'boundaries': ('boundary base=', 'single-resplit'),

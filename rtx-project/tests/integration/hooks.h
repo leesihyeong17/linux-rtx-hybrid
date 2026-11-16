@@ -2,6 +2,7 @@
 /* Included only into the disposable instrumented kernel source. */
 static struct sock *b_observe_sk;
 static int b_fault, b_prepare_count, b_commit_count, b_fault_hits;
+static unsigned int b_alloc_count, b_fail_alloc_at;
 
 static int b_unclone(struct sock *sk, struct sk_buff *skb, gfp_t gfp)
 {
@@ -15,7 +16,11 @@ static int b_unclone(struct sock *sk, struct sk_buff *skb, gfp_t gfp)
 static struct sk_buff *b_alloc(struct sock *sk, int size, gfp_t gfp,
 			       bool force)
 {
-	if (sk == b_observe_sk && b_fault == 2) {
+	if (sk == b_observe_sk)
+		b_alloc_count++;
+	if (sk == b_observe_sk &&
+	    (b_fault == 2 || (b_fail_alloc_at &&
+			     b_alloc_count == b_fail_alloc_at))) {
 		b_fault_hits++;
 		return NULL;
 	}

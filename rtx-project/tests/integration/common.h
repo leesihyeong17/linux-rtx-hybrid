@@ -3,6 +3,7 @@
 #include <net/net_namespace.h>
 
 void b_test_mark_head_lost(struct sock *sk);
+struct sk_buff *b_test_sack_walk(struct sock *sk, u32 start, u32 end);
 
 static unsigned int b_checks, b_failures;
 #define B_EXPECT(condition) do { \
@@ -27,6 +28,7 @@ static struct socket *b_socket(void)
 	sock->sk->sk_sndbuf = 1024 * 1024;
 	b_observe_sk = sock->sk;
 	b_prepare_count = b_commit_count = b_fault_hits = b_fault = 0;
+	b_alloc_count = b_fail_alloc_at = 0;
 	return sock;
 }
 
@@ -130,8 +132,10 @@ static bool b_valid(struct sock *sk)
 		     link != &tp->tsorted_sent_queue; link = link->next)
 			if (link == &nodes[i]->tcp_tsorted_anchor)
 				found = true;
-		if (!found && (!(flags & TCPCB_LOST) ||
-			(flags & TCPCB_SACKED_RETRANS)))
+		if (!found && !list_empty(&nodes[i]->tcp_tsorted_anchor))
+			return false;
+		if (!found && !(flags & TCPCB_SACKED_ACKED) &&
+		    (!(flags & TCPCB_LOST) || (flags & TCPCB_SACKED_RETRANS)))
 			return false;
 	}
 	return true;
@@ -143,6 +147,7 @@ static void b_release(struct socket *sock)
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	b_fault = 0;
+	b_fail_alloc_at = 0;
 	tcp_write_queue_purge(sk);
 	B_EXPECT(rtx_empty(sk) && tcp_write_queue_empty(sk));
 	B_EXPECT(rtx_validate_structure(sk));
