@@ -400,8 +400,15 @@ static void *peer(void *arg __attribute__((unused)))
 				held_len = 0;
 				handle(held, n, 0);
 			}
-			if (++idle > 2400)	/* 120 s without traffic */
+			/*
+			 * 300 s without traffic. A backed-off RTO may wait
+			 * TCP_RTO_MAX (120 s) plus timer-wheel slack, so the
+			 * limit must stay well above that.
+			 */
+			if (++idle > 6000) {
+				dump("CSTRESS_IDLE_TCP", "/proc/net/tcp");
 				break;
+			}
 			continue;
 		}
 		idle = 0;
