@@ -1,6 +1,6 @@
 # A 도메인(Core) 구현 기록
 
-최초 작성: 2026-11-10 · 최종 갱신: 2026-11-11
+최초 작성: 2026-11-10 · 최종 갱신: 2026-11-16
 
 A는 재전송 큐의 공통 API(`rtx_*`), 자료구조, 불변식 검증, 초기화·정리 경로와 통합 브랜치를 담당한다. 이 문서는 A의 구현 범위, 계약, 검증 결과와 한계를 B·C·D가 확인할 수 있도록 기록한다. 중요 작업이 끝날 때마다 3절에 항목을 추가하고 1절·6절의 상태를 갱신한다.
 
@@ -23,11 +23,11 @@ A는 재전송 큐의 공통 API(`rtx_*`), 자료구조, 불변식 검증, 초�
 | 순회 매크로 | `9ad40b1` (PR #4) | main 머지 |
 | RB split API + 디버그 자체 테스트 | `0b15ec3` (PR #9) | main 머지 |
 | 직접 접근 정리 (`tcp.c` init·purge) | `4fe3558` (PR #10) | main 머지 |
-| 측정 카운터 + N 히스토그램 + `rtx_prefetch` | 브랜치 `a/rtx-stats` | PR 리뷰 대기 |
-| merge·trim 계약(③) 초안 | — | 11/13 목표 |
-| RB용 merge API | — | 11/15 목표 |
+| 측정 카운터 + N 히스토그램 + `rtx_prefetch` | `fa64aca` (PR #12) | main 머지 |
+| merge·trim 계약(③) | `73747d3` (PR #17, B 구현) | `rtx_shift_token`으로 대체. 계약은 2.5절 |
+| RB용 merge API | — | 만들지 않음. PR #17의 `rtx_shift_token`이 같은 역할 (2.5절) |
 | 하이브리드 모델·`rtx_validate()` | — | 미착수 |
-| 커널 하이브리드 backend | #14 | LIST·승격·캐시·split·shift token·replace·child 초기화 구현 |
+| 커널 하이브리드 backend | `73747d3` (PR #17, #14) | main 머지. LIST·승격·캐시·split·shift token·replace·child 초기화 구현 (B). A는 사후 리뷰 |
 
 #14의 최신 API 변경, 설계 선택과 실제 검증 범위는 [대표 작업 문서](pr/issue-14-list-promotion-integration.md)에 기록한다. 아래 기존 RB 표·계약과 과거 실행 결과는 당시 기준이다. `rtx_validate_structure()`는 구조 검사만 제공하며 범용 TCP validator나 전체 하이브리드 모델 검증의 완료를 뜻하지 않는다.
 
@@ -155,6 +155,44 @@ make olddefconfig
 
 호출부 카운터의 enum 항목은 미리 정의해 두었다. C는 `rtx_stat_inc(RTX_STAT_...)` 한 줄만 넣으면 된다. 새 항목이 필요하면 A에게 요청한다(enum과 `/proc` 이름표를 함께 바꿔야 한다).
 
+### 2.5 shift·trim·collapse 계약 (PR #17 기준)
+
+A는 원래 merge·trim 계약 초안(11/13)과 RB용 merge API(11/15, `rtx_merge_next`/`rtx_merge_unlink` 두 단계 API)를 만들 계획이었다. B가 #14(PR #17)에서 하이브리드 backend를 구현하면서 같은 문제를 `rtx_shift_token` 하나로 해결해 머지했다. **A는 별도 merge API를 추가하지 않는다.** 같은 기능이 두 번 구현되기 때문이다. 아래는 머지된 코드(`73747d3`)를 읽고 정리한 계약이며, 설계 선택과 B의 검증은 [issue-14 대표 문서](pr/issue-14-list-promotion-integration.md)를 기준으로 한다.
+
+| 경로 | 호출부 | 구조 API | 소속이 유지되는 이유 |
+| --- | --- | --- | --- |
+| SACK shift (부분·전체) | `tcp_shifted_skb()` (`tcp_input.c` 1311·1337·1362행) | `rtx_shift_prepare` / `rtx_shift_commit` | 아래 표. 전체 shift만 소속 판별이 틀어질 수 있어 token으로 보호 |
+| 누적 ACK 부분 trim | `tcp_trim_head()` ← `tcp_clean_rtx_queue()`, `tcp_retransmit_skb()` | 없음 | 큐 맨 앞 skb의 seq만 늘어나고 end_seq를 넘지 않는다. 맨 앞이 first(L)이면(T가 빔) 계속 first(L) |
+| 송신 collapse | `tcp_collapse_retrans()` → `tcp_rtx_queue_unlink_and_free(next_skb)` | 기존 unlink | 제거 대상 `next_skb`의 seq는 바뀌지 않는다. 앞 skb의 end_seq만 늘어나며 소속 판별은 seq만 본다 |
+| SYN-ACK 교체 | `tcp_send_synack()` (`tcp_output.c` 3267행) | `rtx_replace` | seq 범위가 같은 skb로 교체. DEBUG에서 범위 불일치를 WARN |
+
+```c
+struct rtx_shift_token {
+	struct sk_buff *skb;
+	struct sk_buff *next;	/* prepare 시점의 rtx_next(skb) */
+	u8 domain;		/* prepare 시점의 소속 */
+};
+void rtx_shift_prepare(struct sock *sk, struct sk_buff *skb, struct rtx_shift_token *tok);
+void rtx_shift_commit(struct sock *sk, struct rtx_shift_token *tok, bool remove);
+```
+
+| 단계 | 규칙 |
+| --- | --- |
+| prepare 위치 | `tcp_shifted_skb()`에서 payload 이동과 SACK 회계 뒤, `prev`·`skb`의 seq 수정 직전. 이후 실패 반환이 없으므로 abort API가 없다 |
+| prepare 동작 | skb, 소속, `rtx_next(skb)` 저장. DEBUG에서 `rtx_txn_open = 1` |
+| 사이 구간 | 공개 `rtx_*`, `rtx_walk*`, 그 위의 wrapper 모두 금지(조회 포함). DEBUG에서 `rtx_assert_no_txn()`이 WARN. 현재 사이 구간 호출(`tcp_skb_pcount_add`, `tcp_highest_sack` 필드 읽기, `tcp_skb_collapse_tstamp`)은 어댑터를 부르지 않는다 |
+| `highest_sack` | 전체 shift에서 skb가 `highest_sack`이면 `tok.next`로 바꾼다 (기존 `tcp_advance_highest_sack()` → `rtx_next` 호출을 대체) |
+| commit, `remove=false` (부분 shift) | 구조를 바꾸지 않고 경계도 검사하지 않는다. 트랜잭션 종료만 |
+| commit, `remove=true` (전체 shift) | 저장한 소속으로 `__rtx_unlink`. 소속을 다시 판별하지 않는다. tsorted 정리와 skb 해제는 호출자가 commit 뒤에 한다 |
+| commit 후 | token 무효 (`skb`, `next` = NULL) |
+
+C가 3.7절에서 요청한 두 가지에 대한 답:
+
+1. **skb가 first(L)일 때 부분 shift의 경계 검사**: 검사하지 않으며 필요 없다. 부분 shift 전에는 `prev.end_seq == skb.seq`, 후에는 둘 다 `shifted`만큼 늘어나고 `skb.seq < skb.end_seq ≤ next.seq`가 유지된다. skb는 L의 첫 노드로 남고 `prev`(= last(T))의 seq는 그대로라 `seq < first(L).seq`도 유지된다. 따라서 소속과 `rtx_tree_last` 캐시가 바뀌지 않는다. skb가 T의 마지막이고 next가 first(L)인 경우도 `skb.seq < end_seq ≤ first(L).seq`라 TREE로 남는다. 소속이 틀어지는 경우는 전체 shift로 `skb.seq == end_seq == first(L).seq`가 될 때뿐이며, 이것이 token에 소속을 미리 저장하는 이유다.
+2. **prepare~commit 사이 공개 API 허용 여부**: 모두 금지다. 두 단계 merge API 대신 필요한 `next`를 prepare가 token에 담아 넘긴다.
+
+검증 범위: 위 내용은 코드를 읽어 확인한 것이다(실행 아님). B의 Core selftest는 경계에 도달한 전체 shift token과 partial trim을 실행했다(issue-14 문서). **first(L)에서의 부분 shift와 사이 구간 API 호출 시 WARN 발생은 A가 실행해 확인하지 않았다(미실행).** 실제 SACK 패킷 경로의 폭넓은 조합은 #15(B·C)의 범위다.
+
 ## 3. 작업 기록
 
 ### 3.1 기준선 고정 (2026-11-02)
@@ -207,8 +245,8 @@ make olddefconfig
 | `tcp_advance_highest_sack` → `rtx_next` | 승인 (PR #6에서 머지) |
 | prefetch | `rtx_prefetch()`를 A가 제공, 호출부 교체도 A PR에 포함하고 C가 리뷰 |
 | `rtx_first_overlap()` | **커널에 넣지 않는다.** 호출하는 경로가 없다. 사용자 공간 모델에서만 포함 검색과 의미 차이를 검증하는 테스트용으로 쓴다. 설계서 7절 API 초안과 다른 점이다 |
-| SACK shift/merge transaction | `tcp_shifted_skb()`는 seq 수정(1310·1311행) 뒤에 `tcp_advance_highest_sack()`(→`rtx_next`, 1353행)와 `tcp_rtx_queue_unlink_and_free()`(→`rtx_unlink`, 1359행)를 부른다. merge API가 이 둘을 token 기반으로 대신한다. 11/13 계약 초안, 11/15 RB용 API PR |
-| C 요청 명시 사항 | ① partial shift에서 skb가 first(L)일 때 commit의 경계 검사 조건, ② `rtx_merge_next` 뒤 `rtx_merge_unlink` 전까지 공개 API 허용 여부 → 계약 초안에 명시 |
+| SACK shift/merge transaction | `tcp_shifted_skb()`는 seq 수정(1310·1311행) 뒤에 `tcp_advance_highest_sack()`(→`rtx_next`, 1353행)와 `tcp_rtx_queue_unlink_and_free()`(→`rtx_unlink`, 1359행)를 부른다. merge API가 이 둘을 token 기반으로 대신한다. 11/13 계약 초안, 11/15 RB용 API PR. **2026-11-16 갱신**: PR #17의 `rtx_shift_token`으로 대체됨 (2.5절) |
+| C 요청 명시 사항 | ① partial shift에서 skb가 first(L)일 때 commit의 경계 검사 조건, ② `rtx_merge_next` 뒤 `rtx_merge_unlink` 전까지 공개 API 허용 여부 → **2.5절에 답을 기록** (① 검사 불필요, ② 전부 금지) |
 | 측정 카운터 | 인프라와 구조 이벤트는 A, "왜 순회했는지"는 C가 호출부에서 `rtx_stat_inc`로. 우선순위는 N 히스토그램 |
 
 ## 4. 선택과 tradeoff
@@ -265,7 +303,7 @@ make olddefconfig
 | B | `tcp_fragment` split 연결 | split API(PR #9) 머지됨 → B 연결 진행 가능 |
 | B | PR #9, #10 리뷰·머지 | 완료 (2026-11-11) |
 | C | ACK/SACK 경로 전환 (PR #6) | A 리뷰 후 머지 (`d377a82`). 12곳(`tcp_input.c` 11곳 + `tcp.h` 1곳) 전환 정확. 남은 prefetch는 3.6에서 `rtx_prefetch()`로 교체 |
-| C | merge API 연결, 호출부 카운터 | 11/15 RB merge API 머지 후 `tcp_shifted_skb` 연결. 카운터는 2.4절 enum 사용 |
+| C | shift 경로, 호출부 카운터 | merge API 대신 B가 PR #17에서 `tcp_shifted_skb`를 `rtx_shift_token`으로 바꿨다. C의 사후 확인 필요(2.5절). 카운터는 2.4절 enum 사용, 증가 코드는 아직 없음 |
 | D | 환경 수집·ARM64 V0 준비 (PR #8) | main 머지. D 환경은 ARM64(UTM). 최종 측정 기기와 cycles 지원 여부 결정 필요 |
 
 3.6 이후 재전송 큐 루트(`sk->tcp_rtx_queue`)를 어댑터 밖에서 직접 쓰는 곳은 없다. `tcp_input.c`의 나머지 `skb_rb_*`는 수신 out-of-order 큐이며 변경 대상이 아니다.
@@ -274,15 +312,15 @@ make olddefconfig
 
 | 순서 | 작업 | 의존성 | 완료 기준 |
 | --- | --- | --- | --- |
-| 1 | `a/rtx-stats` 머지 | C 리뷰 | main 반영 |
+| 1 | `a/rtx-stats` 머지 | C 리뷰 | 완료 (PR #12, `fa64aca`) |
 | 2 | N 분포 측정 | 1, D 시나리오·측정 기기 | 무손실·손실, RTT 조건별 `n_hist` 기록 |
-| 3 | merge·trim 계약(③) 초안 | — | 11/13. C 요청 2가지 명시 |
-| 4 | RB용 merge API | 3 | 11/15. C가 `tcp_shifted_skb`, B가 `tcp_collapse_retrans` 연결 |
+| 3 | merge·trim 계약(③) 초안 | — | 완료. PR #17 구현 기준으로 2.5절에 기록, C 요청 2가지 답 포함 |
+| 4 | RB용 merge API | 3 | 취소. `rtx_shift_token`(PR #17)이 대체, `tcp_collapse_retrans`는 기존 unlink 유지 |
 | 5 | 사용자 공간 하이브리드 모델 + `rtx_validate()` + 랜덤 trace | — | 정렬 배열 기준 모델과 결과 일치, 실패 seed 저장. B 요청 split 5개 케이스 포함 |
 | 6 | Go/No-Go 판단 | 4, 5 | N 분포와 모델 결과로 V4 계속 또는 V3 축소 결정·기록 |
 | 7 | 커널 하이브리드 backend | 6 | `tcp_sock` 필드, 승격, 캐시. 자체 테스트·모델 동등성 통과 |
 | 8 | init / child clone / purge | 7 | `tcp_init_sock`, `tcp_create_openreq_child`, purge, disconnect 재사용 경로 검사 |
-| 9 | 계약 ③ merge·trim, ④ replace | B·C | 헤더 주석과 이 문서에 확정 |
+| 9 | 계약 ③ merge·trim, ④ replace | B·C | ③·④ 구현은 PR #17. 문서는 2.5절, C 사후 확인 대기 |
 | 10 | V2 패치, `sizeof(struct tcp_sock)` 비교 | 7 | 비교군 커밋과 크기 수치 기록 |
 
 ## 8. 갱신 체크리스트
