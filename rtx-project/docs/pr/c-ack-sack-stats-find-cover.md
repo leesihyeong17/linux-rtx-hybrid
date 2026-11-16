@@ -1,6 +1,6 @@
 # C: ACK/SACK 호출부 카운터 연결과 SACK 검색 경계 sweep
 
-PR: 생성 전 (만든 뒤 링크 갱신). 브랜치 `c/stats-v2`.
+PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/21. 브랜치 `c/stats-v2`.
 기준: main `73747d3f1` (#17 LIST 승격 통합 머지 직후).
 관련: #19 C 리뷰 요청(카운터 연결 위치·부분 ACK trim 관측), #15 매트릭스의 "TREE→LIST를 가로지르는 SACK"·"경계·구멍·wrap" 항목 일부.
 
