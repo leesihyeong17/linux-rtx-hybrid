@@ -2,6 +2,11 @@
 
 작성 기준: 2026-11-06 KST. 이 문서는 실행 순서와 판정 기준이다. 실제 이번 작업의 완료 여부·로그 위치는 별도 작업 기록에 남긴다. 아래 명령이 있다는 이유로 빌드·부팅·성능 측정이 완료된 것은 아니다.
 
+2026-11-18 C PR #23의 ARM64 회귀는 [별도 고정 소스·harness 검증 기록](pr/issue-15-d-arm64-c-regression.md)을 따른다.
+production `e4de76000`과 harness `01acce2b2`의 `rtx-project/tests/integration/`을 조합한다.
+RB/HYBRID의 부팅 fixture·TCP·패킷 시험 및 k16 상태 비교 결과는 해당 문서 10절에 있다.
+아래 역사적 V0/V1 pin이나 DEBUG/STATS off 전용 빌드 도구를 이번 fixture 검증에 그대로 사용하지 않는다.
+
 ## 1. 기준선과 현재 구현
 
 | 대상 | 기준·상태 |
