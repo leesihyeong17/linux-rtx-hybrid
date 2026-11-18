@@ -5,6 +5,7 @@
 2026-11-18 C PR #23의 ARM64 회귀는 [별도 고정 소스·harness 검증 기록](pr/issue-15-d-arm64-c-regression.md)을 따른다.
 production `e4de76000`과 harness `01acce2b2`의 `rtx-project/tests/integration/`을 조합한다.
 RB/HYBRID의 부팅 fixture·TCP·패킷 시험 및 k16 상태 비교 결과는 해당 문서 10절에 있다.
+실제 재시험 순서와 PASS 판정·오류 대응은 [ARM64 RB·HYBRID 테스트 가이드](arm64-c-regression-guide.md)를 따른다.
 아래 역사적 V0/V1 pin이나 DEBUG/STATS off 전용 빌드 도구를 이번 fixture 검증에 그대로 사용하지 않는다.
 
 ## 1. 기준선과 현재 구현
