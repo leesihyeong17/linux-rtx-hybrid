@@ -25,9 +25,15 @@ for old, new in [
 cases = sorted(harness.glob('case_*.c'))
 if not cases:
     raise SystemExit('No integration cases')
-for path in [harness / 'hooks.h', harness / 'common.h', *cases]:
+c_cases = [p for p in cases if p.stem.startswith('case_c')]
+headers = [harness / 'hooks.h', harness / 'common.h']
+if c_cases:
+    headers.append(harness / 'c_common.h')
+for path in [*headers, *cases]:
     shutil.copy2(path, root / 'net/ipv4' / ('b_verify_' + path.name))
 append = '\n#include "b_verify_common.h"\n'
+if c_cases:
+    append += '#include "b_verify_c_common.h"\n'
 for case in cases:
     append += f'#include "b_verify_{case.name}"\n'
 append += '\nstatic int __init b_verify_init(void)\n{\n\tunsigned int checks, failures;\n'
@@ -66,6 +72,20 @@ struct sk_buff *b_test_sack_walk(struct sock *sk, u32 start, u32 end)
 \t\ttcp_highest_sack_reset(sk);
 \tskb = tcp_sacktag_skip(rtx_first(sk), sk, start);
 \treturn tcp_sacktag_walk(skb, sk, NULL, &state, start, end, false);
+}
+'''
+if c_cases:
+    input_modified += '''\nint c_test_ack(struct sock *sk, struct sk_buff *skb);
+int c_test_ack(struct sock *sk, struct sk_buff *skb)
+{
+\ttcp_mstamp_refresh(tcp_sk(sk));
+\treturn tcp_ack(sk, skb, FLAG_SLOWPATH);
+}
+
+void c_test_enter_recovery(struct sock *sk);
+void c_test_enter_recovery(struct sock *sk)
+{
+\ttcp_enter_recovery(sk, false);
 }
 '''
 input_file.write_text(input_modified)
