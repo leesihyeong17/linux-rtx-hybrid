@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 """Shared provenance checks for native performance runs."""
+import csv
 import json
 import os
 from pathlib import Path
@@ -65,18 +66,29 @@ def capture_environment(run, label):
     (run / "capture-env.log").write_text(result.stdout + result.stderr)
     if result.returncode not in (0, 2):
         raise RuntimeError("capture_env failed")
+    capture = Path(result.stdout.strip())
+    with (capture / "statuses.tsv").open() as stream:
+        present = {row["probe"] for row in csv.DictReader(stream, delimiter="\t") if row["status"] == "ok"}
+    missing = {"kernel", "cpuinfo", "cpu-online", "meminfo", "kernel-command-line"} - present
+    if missing:
+        raise ValueError("incomplete measurement environment: " + ", ".join(sorted(missing)))
     pmu = "tool_missing"
     if shutil.which("perf"):
-        probe = subprocess.run(["perf", "stat", "-x", ";", "-e", "cycles", "--",
-                                "python3", "-c", "sum(range(200000))"],
-                               capture_output=True, text=True, timeout=15, env=dict(os.environ, LC_ALL="C"))
-        (run / "pmu-probe.log").write_text(probe.stdout + probe.stderr)
-        pmu = "unavailable"
-        for line in probe.stderr.splitlines():
-            fields = line.split(";")
-            if (not probe.returncode and len(fields) >= 3 and fields[2].strip() == "cycles"
-                    and fields[0].strip().isdigit() and int(fields[0]) > 0):
-                pmu = "accessible"
+        try:
+            probe = subprocess.run(["perf", "stat", "-x", ";", "-e", "cycles", "--",
+                                    "python3", "-c", "sum(range(200000))"], capture_output=True,
+                                   text=True, timeout=15, env=dict(os.environ, LC_ALL="C"))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            (run / "pmu-probe.log").write_text(str(exc))
+            pmu = "unavailable"
+        else:
+            (run / "pmu-probe.log").write_text(probe.stdout + probe.stderr)
+            pmu = "unavailable"
+            for line in probe.stderr.splitlines():
+                fields = line.split(";")
+                if (not probe.returncode and len(fields) >= 3 and fields[2].strip() == "cycles"
+                        and fields[0].strip().isdigit() and int(fields[0]) > 0):
+                    pmu = "accessible"
     return dict(capture="partial" if result.returncode else "complete",
                 pmu_probe=pmu, workload_cycles=None)
 
