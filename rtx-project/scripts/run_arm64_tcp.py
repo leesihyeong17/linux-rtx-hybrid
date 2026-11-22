@@ -92,12 +92,12 @@ class Network:
             self.command(["ip", "netns", "exec", ns, "tc", "qdisc", "replace", "dev", link,
                           "root", "netem", "loss", str(percent) + "%"])
 
-    def spawn(self, args, log):
+    def spawn(self, args, log, pass_fds=()):
         with (self.run / "commands.log").open("a") as commands:
             commands.write(shlex.join(args) + " > " + shlex.quote(str(log)) + "\n")
         with log.open("w") as stream:
             child = subprocess.Popen(args, stdout=stream, stderr=subprocess.STDOUT,
-                                     start_new_session=True)
+                                     start_new_session=True, pass_fds=pass_fds)
         self.children.append(child)
         return child
 

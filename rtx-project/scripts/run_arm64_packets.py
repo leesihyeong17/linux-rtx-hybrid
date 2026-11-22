@@ -6,6 +6,7 @@ SACK, partial cumulative ACK, DSACK, reneging are independent cases. This does
 not prove that the partial ACK trimmed one GSO skb; internal tracing is separate.
 """
 import argparse
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ import tempfile
 
 from build_arm64 import PINS, sha256
 from run_arm64_tcp import Network, PROJECT, boot_evidence
+from arm64_ack_trace import ack_trace
 
 
 def netstat(text):
@@ -80,8 +82,10 @@ def main():
     parser.add_argument("--variant", choices=PINS)
     parser.add_argument("--build-output", type=Path)
     parser.add_argument("--smoke-current-kernel", action="store_true")
+    parser.add_argument("--observe-acks", type=Path, metavar="LAYOUT_DIR",
+                        help="record PARTIAL and DSACK_OFO ACKs using a verified ARM64 trim layout")
     args = parser.parse_args()
-    if args.smoke_current_kernel and (args.variant or args.build_output):
+    if args.smoke_current_kernel and (args.variant or args.build_output or args.observe_acks):
         parser.error("current-kernel smoke must not be labelled as V0/V1")
     if not args.smoke_current_kernel and not (args.variant and args.build_output):
         parser.error("variant/build-output or smoke-current-kernel required")
@@ -111,6 +115,7 @@ def main():
             shutil.copy2(PROJECT / "tests/runtime" / name, run / name)
         state["source_hashes"] = {name: sha256(run / name) for name in ("packet_peer.c", "native_packet_main.c")}
         network.command(["gcc", "-O2", "-Wall", "-Wextra", "-Werror", "-DRTX_NATIVE_PEER",
+                         *(["-DRTX_ACK_TRACE"] if args.observe_acks else []),
                          str(run / "packet_peer.c"), str(run / "native_packet_main.c"), "-o", str(run / "peer")])
         state["peer_sha256"] = sha256(run / "peer")
         network.command(["gcc", "--version"])
@@ -121,8 +126,23 @@ def main():
         network.command(["ip", "-n", ns, "link", "set", "lo", "up"])
         before = netstat(network.command(["ip", "netns", "exec", ns, "cat", "/proc/net/netstat"]).stdout)
         kernel_before = network.command(["dmesg", "--raw"], required=False)
-        peer = network.spawn(["ip", "netns", "exec", ns, str(run / "peer")], run / "peer.log")
-        rc = peer.wait(timeout=40)
+        with ExitStack() as resources:
+            command = ["ip", "netns", "exec", ns]
+            fds = ()
+            if args.observe_acks:
+                state["ack_trace"] = "STARTED"
+                save()
+                instance = resources.enter_context(ack_trace(args.observe_acks, args.build_output,
+                                                              state, run))
+                # ip netns exec can remount sysfs. Open the private controls in
+                # the host mount namespace and pass them through to this peer.
+                fds = tuple(resources.enter_context((instance / name).open("w")).fileno()
+                            for name in ("trace_marker", "set_event_pid", "tracing_on"))
+                command += ["env", "RTX_ACK_FDS=" + ",".join(map(str, fds))]
+            peer = network.spawn(command + [str(run / "peer")], run / "peer.log", pass_fds=fds)
+            rc = peer.wait(timeout=40)
+        if args.observe_acks:
+            state["ack_trace"] = "COLLECTED: inspect markers, probe hits and loss counters"
         (run / "peer.exitcode").write_text(str(rc) + "\n")
         if rc:
             raise RuntimeError("packet peer exited " + str(rc))
