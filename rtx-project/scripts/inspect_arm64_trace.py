@@ -3,6 +3,7 @@
 """Read-only nm/ftrace inventory; never configure tracing or assign timings."""
 import argparse
 import json
+import os
 from pathlib import Path
 import platform
 import subprocess
@@ -112,6 +113,12 @@ def main():
         lines.append("| %s | %s | %s | %s |" % (row["function"],
                      ", ".join(row["nm_symbols"]) or "ABSENT", row["ftrace"], row["alternative"]))
     (run / "functions.md").write_text("\n".join(lines) + "\n")
+    # Like the TCP/packet runners, return this run's evidence to the sudo user.
+    if os.geteuid() == 0 and "SUDO_UID" in os.environ and "SUDO_GID" in os.environ:
+        uid, gid = int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
+        for path in run.iterdir():
+            os.chown(path, uid, gid, follow_symlinks=False)
+        os.chown(run, uid, gid)
     print(run)
 
 

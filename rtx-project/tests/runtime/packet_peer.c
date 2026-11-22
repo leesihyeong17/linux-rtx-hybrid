@@ -135,6 +135,30 @@ static void write_file(const char *path, const char *value)
 	close(fd);
 }
 
+#ifdef RTX_ACK_TRACE
+static int marker_fd;
+
+static void start_ack_trace(void)
+{
+	const char *fds = getenv("RTX_ACK_FDS");
+	int pid_fd, on_fd;
+
+	check(fds && sscanf(fds, "%d,%d,%d", &marker_fd, &pid_fd, &on_fd) == 3,
+	      "ACK trace controls");
+	check(dprintf(pid_fd, "%d\n", getpid()) > 0, "trace peer pid");
+	check(write(on_fd, "1\n", 2) == 2, "enable peer trace");
+}
+
+static void ack_marker(const char *phase, const char *name)
+{
+	check(dprintf(marker_fd, "RTX_ACK %s %s pid=%d port=%u base=%u\n",
+		      phase, name, getpid(), ntohs(local_port), base_seq) > 0,
+	      "ACK window marker");
+}
+#else
+#define ack_marker(phase, name) do { } while (0)
+#endif
+
 static void packet_case(int scenario)
 {
 	int sack = scenario == 1 || scenario == 5;
@@ -217,6 +241,7 @@ static void packet_case(int scenario)
 		}
 	} else if (scenario == 3) {
 		/* Packet behavior only; internal GSO/trim proof is separate. */
+		ack_marker("BEGIN", name);
 		reply(base_seq + 2000, 0, 0, 0);
 		usleep(10000);
 		struct tcp_info partial;
@@ -225,8 +250,10 @@ static void packet_case(int scenario)
 		check(partial.tcpi_unacked == 2 && !partial.tcpi_sacked && !partial.tcpi_lost,
 		      "partial ACK packet accounting");
 		printf("RTX_ACCOUNT PARTIAL acked_bytes=2000 unacked=2 sacked=0 lost=0\n");
+		ack_marker("END", name);
 	} else if (scenario == 6) {
 		/* Keep packets_out nonzero so SACK processing can reach the walk. */
+		ack_marker("BEGIN", name);
 		reply(base_seq, 0, 0, 3);
 		usleep(10000);
 		struct tcp_info ofo;
@@ -235,6 +262,7 @@ static void packet_case(int scenario)
 		check(ofo.tcpi_unacked == 4 && ofo.tcpi_sacked == 2, "DSACK OFO packet accounting");
 		printf("RTX_ACCOUNT DSACK_OFO unacked=%u sacked=%u lost=%u retrans=%u\n",
 		       ofo.tcpi_unacked, ofo.tcpi_sacked, ofo.tcpi_lost, ofo.tcpi_retrans);
+		ack_marker("END", name);
 	} else if (scenario != 4) {
 		/* Withhold all ACKs until the kernel retransmits actual data. */
 		do { tcp = receive(packet, &payload); } while (!payload);
@@ -292,6 +320,9 @@ void run_packet_cases(void)
 	check(!ioctl(ctl, SIOCSIFFLAGS, &req), "interface up");
 	close(ctl);
 #ifdef RTX_NATIVE_PEER
+#ifdef RTX_ACK_TRACE
+	start_ack_trace();
+#endif
 	packet_case(1);
 	packet_case(3);
 	packet_case(4);
