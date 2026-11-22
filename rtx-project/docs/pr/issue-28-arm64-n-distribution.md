@@ -13,6 +13,12 @@
 빈 큐에 머문 시간, 소켓별 분포, 개별 세그먼트의 비율은 제공하지 않는다.
 K가 구간 중간에 걸리면 히스토그램만으로 정확한 `N <= K` 비율을 계산할 수 없다.
 
+> **STATS v2 (A, [PR 문서](a-stats-v2.md))**: 수집기가 v2 출력도 읽는다. v2 커널에서는
+> `n_link`(위 `n_hist`와 같은 삽입 시점)와 `n_ack`(ACK 처리 시점)를 각각 74구간(N 0~64는 1 단위)으로
+> 받아 정확한 `N <= K` 비율(`le_share`)을 내고, 측정 동안 포트 5001만 세도록 필터를 건다.
+> v1 커널에서의 동작·결과 형식은 아래와 같다(CSV에 `histogram` 열만 추가). 자세한 차이는
+> [A_N_HISTOGRAM.md](../A_N_HISTOGRAM.md) 2절.
+
 도구 기준은 main `cb13e743146e8b900ede9b56b29280fe1e3b45ae`다. 변경 파일은
 [실행기](../../scripts/run_arm64_n_distribution.py)와
 [판정기 시험](../../tests/test_arm64_n_distribution.py), 이 문서다.

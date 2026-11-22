@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
-"""Measure insert-time RTX queue lengths on the team's ARM64 STATS kernel."""
+"""Measure RTX queue lengths on the team's ARM64 STATS kernel.
+
+Reads both /proc/rtx_stats formats:
+  v1 (PR #12)  n_hist: N right after each insert, 16 power-of-two buckets.
+  v2 (A STATS v2)  n_link: same sampling point as v1; n_ack: N on entry to
+               tcp_clean_rtx_queue(). Buckets are exact for N 0..64. The
+               runner limits counting to the test port while it runs.
+"""
 import argparse
 import csv
 import fcntl
@@ -13,6 +20,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 
 from build_arm64 import sha256, write_status
 from collect_c_arm64 import verify_identity
@@ -20,28 +28,50 @@ from run_arm64_tcp import ENDPOINT, Network, PROJECT
 
 STATS = Path("/proc/rtx_stats")
 BUCKETS = tuple("%d-%d" % (1 << b, (2 << b) - 1) for b in range(15)) + ("32768-",)
+V2_BUCKETS = tuple(str(n) for n in range(65)) + ("65-127",) + tuple(
+    "%d-%d" % (1 << b, (2 << b) - 1) for b in range(7, 14)) + ("16384-",)
+HISTOGRAMS = {"v1": ("n_hist",), "v2": ("n_link", "n_ack")}
+HIST_BUCKETS = {"n_hist": BUCKETS, "n_link": V2_BUCKETS, "n_ack": V2_BUCKETS}
 COUNTERS = set("sack_block sack_walk_skb find_cover_list_steps shift_partial shift_merge "
                "shift_fallback ack_clean ack_unlink ack_trim insert_append".split())
+V2_COUNTERS = COUNTERS | set("filter_port insert_ordered insert_split unlink_tree unlink_list "
+                             "promote find_cover find_cover_tree_steps".split())
+# Test traffic uses this server port so a v2 kernel can count only it.
+PORT = 5001
+# N <= K shares reported for v2 histograms (exact because K <= 64).
+K_VALUES = (1, 4, 8, 16, 32, 64)
 # Loss and RTT settings are symmetric. Only the sender introduces reordering.
 MATRIX = [(loss, rtt, 0) for loss in (0, 1) for rtt in (0, 20, 50)] + [(1, 20, 25)]
 
 
 def parse_stats(text):
-    counters, histogram = {}, {}
+    """Return (format, {histogram name: {bucket: count}}, counters)."""
+    counters, hists = {}, {name: {} for name in HIST_BUCKETS}
     for line in text.splitlines():
         parts = line.split()
-        if len(parts) == 3 and parts[0] == "n_hist" and parts[1] in BUCKETS:
-            values, key = histogram, parts[1]
-        elif len(parts) == 2 and parts[0] != "n_hist":
+        if len(parts) == 3 and parts[0] in HIST_BUCKETS and parts[1] in HIST_BUCKETS[parts[0]]:
+            values, key = hists[parts[0]], parts[1]
+        elif len(parts) == 2 and parts[0] not in HIST_BUCKETS:
             values, key = counters, parts[0]
         else:
             raise ValueError("malformed stats line: " + line)
         if key in values or not re.fullmatch(r"[0-9]+", parts[-1]):
             raise ValueError("duplicate or invalid stats value: " + line)
         values[key] = int(parts[-1])
-    if set(histogram) != set(BUCKETS) or not COUNTERS.issubset(counters):
+    fmt = "v2" if hists["n_link"] or hists["n_ack"] or "filter_port" in counters else "v1"
+    names = HISTOGRAMS[fmt]
+    if any(hists[n] for n in HIST_BUCKETS if n not in names):
+        raise ValueError("mixed v1 and v2 RTX histograms")
+    if any(set(hists[n]) != set(HIST_BUCKETS[n]) for n in names) or \
+            not (V2_COUNTERS if fmt == "v2" else COUNTERS).issubset(counters):
         raise ValueError("incomplete RTX histogram or counters")
-    return histogram, counters
+    return fmt, {n: hists[n] for n in names}, counters
+
+
+def share_le(hist, k):
+    """Share of samples with N <= k; exact v2 buckets only."""
+    total = sum(hist.values())
+    return sum(c for b, c in hist.items() if "-" not in b and int(b) <= k) / total
 
 
 def difference(before, after):
@@ -54,15 +84,47 @@ def difference(before, after):
 
 
 def distribution(before, after):
-    old_hist, old_counts = parse_stats(before)
-    new_hist, new_counts = parse_stats(after)
-    hist = difference(old_hist, new_hist)
+    old_fmt, old_hists, old_counts = parse_stats(before)
+    fmt, new_hists, new_counts = parse_stats(after)
+    if fmt != old_fmt:
+        raise ValueError("stats format changed during sample")
+    if fmt == "v2" and old_counts["filter_port"] != new_counts["filter_port"]:
+        raise ValueError("port filter changed during sample")
+    port = new_counts.pop("filter_port", None)
+    old_counts.pop("filter_port", None)
+    hists = {name: difference(old_hists[name], new_hists[name]) for name in new_hists}
     counts = difference(old_counts, new_counts)
-    total = sum(hist.values())
+    insert = hists[HISTOGRAMS[fmt][0]]
+    total = sum(insert.values())
     if not total or not counts["insert_append"]:
         raise ValueError("no queue-length samples or appends during transfer")
-    return {"histogram": hist, "insert_samples": total, "counters": counts,
-            "percent": {key: 100 * hist[key] / total for key in BUCKETS}}
+    result = {"stats_format": fmt, "histogram": insert, "insert_samples": total,
+              "counters": counts,
+              "percent": {key: 100 * insert[key] / total for key in insert}}
+    if fmt == "v2":
+        inserts = counts["insert_append"] + counts["insert_ordered"] + counts["insert_split"]
+        if total != inserts:
+            raise ValueError("n_link samples %d != inserts %d" % (total, inserts))
+        acks = sum(hists["n_ack"].values())
+        if not acks or acks != counts["ack_clean"]:
+            raise ValueError("n_ack samples %d != ack_clean %d" % (acks, counts["ack_clean"]))
+        result.update(filter_port=port, histograms=hists, ack_samples=acks,
+                      le_share={name: {str(k): share_le(h, k) for k in K_VALUES}
+                                for name, h in hists.items()})
+    return result
+
+
+@contextmanager
+def port_filter(fmt, counters):
+    """v2: count only PORT while measuring, then restore the previous filter."""
+    if fmt == "v1":
+        yield
+        return
+    STATS.write_text("port %d\n" % PORT)
+    try:
+        yield
+    finally:
+        STATS.write_text("port %d\n" % counters["filter_port"])
 
 
 def netem(loss, rtt, reorder):
@@ -92,7 +154,7 @@ def measure(path, condition, size):
         before = STATS.read_text()
         (path / "before.txt").write_text(before)
         try:
-            result["transfer"] = network.case(loss, False, size, "transfer")
+            result["transfer"] = network.case(loss, False, size, "transfer", PORT)
         finally:
             after = STATS.read_text()
             (path / "after.txt").write_text(after)
@@ -113,21 +175,23 @@ def measure(path, condition, size):
 
 
 def write_table(run, samples):
-    # Keep the pilot separate. Pool link-event counts, not rounded percentages.
+    # Keep the pilot separate. Pool event counts, not rounded percentages.
     groups = {}
     for sample in samples:
         if sample["status"] != "PASS":
             continue
-        group = (sample["phase"], sample["loss_percent_each_egress"], sample["added_rtt_ms"],
-                 sample["sender_reorder_percent"])
-        groups.setdefault(group, []).append(sample["histogram"])
+        hists = sample.get("histograms") or {"n_hist": sample["histogram"]}
+        for name, hist in hists.items():
+            group = (sample["phase"], sample["loss_percent_each_egress"], sample["added_rtt_ms"],
+                     sample["sender_reorder_percent"], name)
+            groups.setdefault(group, []).append(hist)
     with (run / "distribution.csv").open("w", newline="") as stream:
         writer = csv.writer(stream)
         writer.writerow(["phase", "loss_percent_each_egress", "added_rtt_ms", "sender_reorder_percent",
-                         "repetitions_completed", "bucket", "count", "total", "percent"])
+                         "histogram", "repetitions_completed", "bucket", "count", "total", "percent"])
         for group, histograms in groups.items():
             total = sum(sum(h.values()) for h in histograms)
-            for key in BUCKETS:
+            for key in HIST_BUCKETS[group[-1]]:
                 count = sum(h[key] for h in histograms)
                 writer.writerow([*group, len(histograms), key, count, total, 100 * count / total])
 
@@ -144,35 +208,45 @@ def collect(args, run, state):
                  boot_id=Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
                  config_sha256=sha256(config), build_run=str(args.build_run.resolve()),
                  runner_sha256=sha256(__file__), endpoint_sha256=sha256(ENDPOINT),
-                 workload="one 198.18.0.1 -> 198.18.0.2 TCP transfer per fresh veth/netns pair",
-                 stats_scope="VM-wide insert events including background TCP; no reset or subtraction")
+                 workload="one 198.18.0.1 -> 198.18.0.2:%d TCP transfer per fresh veth/netns pair"
+                 % PORT)
     # Other instances of this runner on the same VM share this proc inode.
     with STATS.open() as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        parse_stats(lock.read())
+        fmt, _, counters = parse_stats(lock.read())
         if os.geteuid():
             raise PermissionError("sudo is required for the isolated veth and namespaces")
-        env = subprocess.run(["bash", str(PROJECT / "scripts/capture_env.sh"), "--output-root",
-                              str(run), "--label", "n-distribution"], capture_output=True, text=True)
-        (run / "capture-env.log").write_text(env.stdout + env.stderr)
-        if env.returncode not in (0, 2):
-            raise RuntimeError("capture_env failed; inspect capture-env.log")
-        state["env_capture"] = {"directory": Path(env.stdout.strip()).name,
-                                "status": "PARTIAL" if env.returncode else "COMPLETE"}
-        trials = [("pilot", 1, (0, 0, 0))]
-        if not args.pilot_only:
-            trials += [("matrix", rep, cond) for rep in range(1, args.repetitions + 1) for cond in MATRIX]
-        for phase, rep, cond in trials:
-            label = "%s-%02d-loss%d-rtt%d-reorder%d" % (phase, rep, *cond)
-            path = run / label
-            path.mkdir()
-            result = measure(path, cond, args.bytes)
-            result.update(phase=phase, repetition=rep)
-            state["samples"].append(result)
-            write_status(run, state)
-            if result["status"] != "PASS":
-                raise RuntimeError("failed sample " + label + ": " +
-                                   str(result.get("error") or result["cleanup_errors"]))
+        state["stats_format"] = fmt
+        state["stats_scope"] = (
+            "VM-wide events including background TCP (v1 has no filter)" if fmt == "v1" else
+            "TCP sockets with local or remote port %d (v2 filter)" % PORT) + \
+            "; before/after difference, no reset"
+        with port_filter(fmt, counters):
+            run_trials(args, run, state)
+
+
+def run_trials(args, run, state):
+    env = subprocess.run(["bash", str(PROJECT / "scripts/capture_env.sh"), "--output-root",
+                          str(run), "--label", "n-distribution"], capture_output=True, text=True)
+    (run / "capture-env.log").write_text(env.stdout + env.stderr)
+    if env.returncode not in (0, 2):
+        raise RuntimeError("capture_env failed; inspect capture-env.log")
+    state["env_capture"] = {"directory": Path(env.stdout.strip()).name,
+                            "status": "PARTIAL" if env.returncode else "COMPLETE"}
+    trials = [("pilot", 1, (0, 0, 0))]
+    if not args.pilot_only:
+        trials += [("matrix", rep, cond) for rep in range(1, args.repetitions + 1) for cond in MATRIX]
+    for phase, rep, cond in trials:
+        label = "%s-%02d-loss%d-rtt%d-reorder%d" % (phase, rep, *cond)
+        path = run / label
+        path.mkdir()
+        result = measure(path, cond, args.bytes)
+        result.update(phase=phase, repetition=rep)
+        state["samples"].append(result)
+        write_status(run, state)
+        if result["status"] != "PASS":
+            raise RuntimeError("failed sample " + label + ": " +
+                               str(result.get("error") or result["cleanup_errors"]))
 
 
 def main():
