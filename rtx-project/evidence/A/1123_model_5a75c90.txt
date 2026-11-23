@@ -1,0 +1,80 @@
+# a_model_test.sh
+date:     2026-11-23T03:20:58Z
+machine:  Linux 6.18.44-fc-v726 x86_64 (vm)
+compiler: gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+python:   Python 3.13.18
+target:   pr33 = 5a75c90a5faaab9bf899016f8f46e90b2adfa0a3
+tool:     909003bfe966a72f85ac77d820900ba29e51bfab
+seeds:    random 0:2000, mutants 0:100
+config:   kernel CONFIG_* are set per binary, see CONF lines
+
+## build
+rb
+rb-plain
+hyb-k1
+hyb-k2
+hyb-k4
+hyb-k16
+hyb-k4-plain
+hyb-k16-plain
+069f5f64d8889143236a3ebdb8532ddaca8e42d08bc4b2162495c8f7257a7549  kinc/net/tcp_rtx.h
+a1f9bff80dea78cf659bcec13bd76d0e1e90da6f7477718845db0086193725da  kinc/linux/list.h
+4a74ca25ef611971254d35597443c68d6994ebba8db910fc88adc896bcb8f16c  kinc/linux/rbtree.h
+0d6d4471eb3503da983b2c796fc173c8803925f2d00d714bbb6932ca00adbcfb  kinc/linux/rbtree_augmented.h
+d14285f620fbb7244377d1599af428d250a3dd25b786d74fdd1f05eb7d4616f1  src/rbtree.c
+7bc12bb4896874adb2466c45afe3f1d985ed2fc88eb0c269212f448d014182b4  src/tcp_rbtree_insert.c
+rb             CONF hybrid=0 k=0 debug=1 stats=1 cache=0 tail=0 hist=v2 nbucket=1
+rb-plain       CONF hybrid=0 k=0 debug=0 stats=0 cache=0 tail=0 hist=none nbucket=1
+hyb-k1         CONF hybrid=1 k=1 debug=1 stats=1 cache=0 tail=0 hist=v2 nbucket=1
+hyb-k16        CONF hybrid=1 k=16 debug=1 stats=1 cache=0 tail=0 hist=v2 nbucket=1
+hyb-k16-plain  CONF hybrid=1 k=16 debug=0 stats=0 cache=0 tail=0 hist=none nbucket=1
+hyb-k2         CONF hybrid=1 k=2 debug=1 stats=1 cache=0 tail=0 hist=v2 nbucket=1
+hyb-k4         CONF hybrid=1 k=4 debug=1 stats=1 cache=0 tail=0 hist=v2 nbucket=1
+hyb-k4-plain   CONF hybrid=1 k=4 debug=0 stats=0 cache=0 tail=0 hist=none nbucket=1
+
+## scenarios
+mode=scenarios bins=hyb-k1,hyb-k16,hyb-k16-plain,hyb-k2,hyb-k4,hyb-k4-plain,rb,rb-plain
+scenarios=stats_v2_buckets,empty,single_reuse,append_promote,tree_only_then_list,ack_and_boundary_unlink,split,shift_merge,wrap_0,wrap_1,wrap_500,wrap_1447,wrap_1448,wrap_3000,replace,purge_reuse,holes
+traces=17 commands=10055
+ops: ack=15 append=455 cover=6373 merge=6 ordered=7 overlap=2050 purge=5 replace=11 shift=4 split=27 unlink=12
+coverage hyb-k1  ack_L=5 ack_T=63 ack_to_empty=6 boundary_wrap=6 cover_L=404 cover_T=5755 cover_miss=214 merge_TL=1 merge_TT=5 ord_list=1 ord_tree=6 promote=432 replace_L=2 replace_T=9 shift_TL=1 shift_TT=3 split_L=1 split_T=26 split_promote=1 split_promote_self=1 split_wrap=5 state_both=494 state_empty=14 state_list_full=518 state_list_only=24 state_tree_only=11 trim_T=7 unlink_L=2 unlink_T=10 unlink_first_l=2 wrap_inside=5
+coverage hyb-k16 ack_L=16 ack_T=52 ack_to_empty=6 boundary_wrap=6 cover_L=3142 cover_T=3017 cover_miss=214 merge_LL=4 merge_TL=1 merge_TT=1 ord_list=3 ord_tree=4 promote=215 replace_L=9 replace_T=2 shift_LL=2 shift_TL=1 shift_TT=1 split_L=12 split_T=15 split_promote=10 split_promote_self=3 split_wrap=5 state_both=275 state_empty=14 state_list_full=265 state_list_only=251 state_tree_only=3 trim_T=7 unlink_L=8 unlink_T=4 unlink_first_l=2 wrap_inside=5
+coverage hyb-k2  ack_L=5 ack_T=63 ack_to_empty=6 boundary_wrap=6 cover_L=579 cover_T=5580 cover_miss=214 merge_TL=2 merge_TT=4 ord_list=2 ord_tree=5 promote=417 replace_L=4 replace_T=7 shift_TL=1 shift_TT=3 split_L=2 split_T=25 split_promote=2 split_promote_self=1 split_wrap=5 state_both=478 state_empty=14 state_list_full=490 state_list_only=40 state_tree_only=11 trim_T=7 unlink_L=3 unlink_T=9 unlink_first_l=3 wrap_inside=5
+coverage hyb-k4  ack_L=6 ack_T=62 ack_to_empty=6 boundary_wrap=6 cover_L=932 cover_T=5227 cover_miss=214 merge_LL=2 merge_TL=1 merge_TT=3 ord_list=2 ord_tree=5 promote=389 replace_L=6 replace_T=5 shift_LL=1 shift_TL=1 shift_TT=2 split_L=7 split_T=20 split_promote=7 split_promote_self=3 split_wrap=5 state_both=454 state_empty=14 state_list_full=455 state_list_only=72 state_tree_only=3 trim_T=7 unlink_L=4 unlink_T=8 unlink_first_l=2 wrap_inside=5
+coverage rb      ack_T=68 ack_to_empty=6 cover_T=6159 cover_miss=214 merge_TT=6 ord_tree=7 replace_T=11 shift_TT=4 split_T=27 split_wrap=5 state_empty=14 state_tree_only=529 trim_T=7 unlink_T=12 wrap_inside=5
+failures=0
+
+## random
+mode=random bins=hyb-k1,hyb-k16,hyb-k16-plain,hyb-k2,hyb-k4,hyb-k4-plain,rb,rb-plain
+seeds=0:2000 profiles={'large': 400, 'medium': 800, 'small': 800}
+traces=2000 commands=5323293
+ops: ack=146273 append=351241 cover=2000000 merge=55967 ordered=96794 overlap=1000000 purge=4895 replace=44287 shift=62568 split=131798 unlink=43806
+coverage hyb-k1  ack_L=25382 ack_T=401134 ack_to_empty=28580 boundary_wrap=1641 cover_L=261445 cover_T=888111 cover_miss=850444 merge_TL=13703 merge_TT=42264 ord_list=31440 ord_tree=65354 promote=356371 replace_L=9951 replace_T=34336 shift_TL=15895 shift_TT=46673 split_L=28419 split_T=103379 split_promote=28419 split_promote_self=28419 split_wrap=370 state_both=784322 state_empty=37605 state_list_full=837456 state_list_only=53134 state_tree_only=62568 trim_L=7788 trim_T=46501 unlink_L=9826 unlink_T=33980 unlink_first_l=9826 wrap_inside=1009
+coverage hyb-k16 ack_L=315821 ack_T=110695 ack_to_empty=28580 boundary_wrap=341 cover_L=1026536 cover_T=123020 cover_miss=850444 merge_LL=48854 merge_TL=2907 merge_TT=4206 ord_list=47727 ord_tree=49067 promote=64343 replace_L=38763 replace_T=5524 shift_LL=54791 shift_TL=3379 shift_TT=4398 split_L=114824 split_T=16974 split_promote=12864 split_promote_self=793 split_wrap=370 state_both=330972 state_empty=37605 state_list_full=124379 state_list_only=551068 state_tree_only=17984 trim_L=43683 trim_T=10606 unlink_L=38360 unlink_T=5446 unlink_first_l=10729 wrap_inside=1009
+coverage hyb-k2  ack_L=57992 ack_T=368524 ack_to_empty=28580 boundary_wrap=1554 cover_L=459999 cover_T=689557 cover_miss=850444 merge_LL=12770 merge_TL=10201 merge_TT=32996 ord_list=34900 ord_tree=61894 promote=327129 replace_L=17246 replace_T=27041 shift_LL=14733 shift_TL=12152 shift_TT=35683 split_L=50079 split_T=81719 split_promote=38132 split_promote_self=19054 split_wrap=370 state_both=758423 state_empty=37605 state_list_full=748482 state_list_only=120047 state_tree_only=21554 trim_L=14277 trim_T=40012 unlink_L=16934 unlink_T=26872 unlink_first_l=10741 wrap_inside=1009
+coverage hyb-k4  ack_L=127029 ack_T=299487 ack_to_empty=28580 boundary_wrap=1068 cover_L=695540 cover_T=454016 cover_miss=850444 merge_LL=28276 merge_TL=6454 merge_TT=21237 ord_list=38657 ord_tree=58137 promote=259107 replace_L=26146 replace_T=18141 shift_LL=32540 shift_TL=7430 shift_TT=22598 split_L=76999 split_T=54799 split_promote=39926 split_promote_self=9917 split_wrap=370 state_both=634488 state_empty=37605 state_list_full=571009 state_list_only=247521 state_tree_only=18015 trim_L=24024 trim_T=30265 unlink_L=25756 unlink_T=18050 unlink_first_l=10770 wrap_inside=1009
+coverage rb      ack_T=426516 ack_to_empty=28580 cover_T=1149556 cover_miss=850444 merge_TT=55967 ord_tree=96794 replace_T=44287 shift_TT=62568 split_T=131798 split_wrap=370 state_empty=37605 state_tree_only=900024 trim_T=54289 unlink_T=43806 wrap_inside=1009
+failures=0
+
+## mutants
+mutants=17 seeds=0:100
+MUTANT domain_first_l_is_tree           KILLED scen_fail=45 total_fail=345 bins=hyb-k1,hyb-k4,hyb-k4-plain first=single_reuse/hyb-k1: D first=1 last=1 fwd=1ERR cmd=3 WARN /tmp/a_model.02Cevq/mutants/domain_first_l_is_tree/ki
+MUTANT unlink_keeps_tree_last           KILLED scen_fail=9 total_fail=309 bins=hyb-k1,hyb-k4,hyb-k4-plain first=ack_and_boundary_unlink/hyb-k1: ERR cmd=418 tree cache first=4/4 last=39/38
+MUTANT limit_k_minus_1                  KILLED scen_fail=41 total_fail=341 bins=hyb-k1,hyb-k4,hyb-k4-plain first=single_reuse/hyb-k1: D first=1 last=1 fwd=1 bwd=1 dom=T empty=0
+MUTANT prev_of_first_l_null             KILLED scen_fail=42 total_fail=342 bins=hyb-k1,hyb-k4,hyb-k4-plain first=append_promote/hyb-k1: D first=1 last=2 fwd=1,2 bwd=2 dom=TL empty=0
+MUTANT next_of_tree_last_null           KILLED scen_fail=42 total_fail=342 bins=hyb-k1,hyb-k4,hyb-k4-plain first=append_promote/hyb-k1: D first=1 last=2 fwd=1 bwd=2,1 dom=T empty=0
+MUTANT cover_list_end_inclusive         KILLED scen_fail=43 total_fail=343 bins=hyb-k1,hyb-k4,hyb-k4-plain first=single_reuse/hyb-k1: C 1
+MUTANT cover_list_from_boundary_minus   KILLED scen_fail=42 total_fail=342 bins=hyb-k1,hyb-k4,hyb-k4-plain first=single_reuse/hyb-k1: C -1
+MUTANT ordered_list_position            KILLED scen_fail=3 total_fail=303 bins=hyb-k1,hyb-k4,hyb-k4-plain first=tree_only_then_list/hyb-k1: ERR cmd=41 list order 4 after 5
+MUTANT split_list_before_skb            KILLED scen_fail=5 total_fail=305 bins=hyb-k1,hyb-k4,hyb-k4-plain first=split/hyb-k1: ERR cmd=65 list order 20 after 23
+MUTANT split_ignores_token_domain       KILLED scen_fail=5 total_fail=305 bins=hyb-k1,hyb-k4,hyb-k4-plain first=split/hyb-k1: ERR cmd=65 list order 20 after 23
+MUTANT shift_recomputes_domain          KILLED scen_fail=1 total_fail=233 bins=hyb-k1,hyb-k4,hyb-k4-plain first=shift_merge/hyb-k1: D first=1 last=24 fwd=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22,23,24 bwd=24,2
+MUTANT replace_keeps_tree_first         KILLED scen_fail=3 total_fail=254 bins=hyb-k1,hyb-k4,hyb-k4-plain first=replace/hyb-k1: ERR cmd=61 tree cache first=1/21 last=19/19
+MUTANT tree_insert_first_cache          KILLED scen_fail=42 total_fail=342 bins=hyb-k1,hyb-k4,hyb-k4-plain first=append_promote/hyb-k1: no output (rc=-11 signal 11)
+MUTANT tail_append_keeps_first          N/A (code not in this header)
+MUTANT tail_append_left_child           N/A (code not in this header)
+MUTANT nbucket_exact_edge               KILLED scen_fail=5 total_fail=8 bins=hyb-k1,hyb-k4,hyb-k4-plain,rb,rb-plain first=stats_v2_buckets/hyb-k1: B 65
+MUTANT empty_ignores_list               KILLED scen_fail=42 total_fail=342 bins=hyb-k1,hyb-k4,hyb-k4-plain first=single_reuse/hyb-k1: D first=1 last=1 fwd=1 bwd=1 dom=L empty=1
+survived=0
+
+RESULT PASS
