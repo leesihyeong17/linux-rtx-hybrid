@@ -57,6 +57,40 @@ class RtxModelQuick(unittest.TestCase):
         fails = rtx_model.run_trace(self.tmp, self.bins, tr, "neg", None)
         self.assertEqual(len(fails), len(self.bins))
 
+    def test_rejects_mislabeled_binary(self):
+        """A binary whose CONF differs from its build must fail (PR #35)."""
+        tmp = tempfile.mkdtemp(prefix="rtx_model_swap.")
+        try:
+            for f in os.listdir(self.tmp):
+                src = os.path.join(self.tmp, f)
+                if os.path.isfile(src):
+                    shutil.copy2(src, tmp)
+            shutil.copy2(os.path.join(tmp, "rb-plain"), os.path.join(tmp, "rb"))
+            bins = rtx_model.list_bins(tmp)
+            label, tr = next(iter(rtx_model.scenarios(self.ks)))
+            fails = rtx_model.run_trace(tmp, bins, tr, label, None)
+            self.assertEqual([f["bin"] for f in fails], ["rb"])
+            self.assertIn("CONF mismatch", fails[0]["error"])
+            self.assertIn("debug=0 (want 1)", fails[0]["error"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_mutant_build_failure_fails_check(self):
+        """A mutant that does not build must not count as KILLED (PR #35)."""
+        work = tempfile.mkdtemp(prefix="rtx_model_mut.")
+        try:
+            p = subprocess.run(
+                [sys.executable, os.path.join(TOOL, "mutants.py"),
+                 "--repo", ROOT, "--work", work, "--seeds", "0:1"],
+                env=dict(os.environ, CC="false"), capture_output=True,
+                text=True, timeout=600)
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn("BUILD_FAILED", p.stdout)
+        self.assertNotIn(" KILLED ", p.stdout)
+        self.assertNotRegex(p.stdout, r"build_failed=0\b")
+
     def test_hist_buckets_from_spec(self):
         hb = rtx_model.hist_bucket
         self.assertEqual([hb(n, "v1") for n in (1, 2, 3, 4, 65535, 65536, 10**6)],

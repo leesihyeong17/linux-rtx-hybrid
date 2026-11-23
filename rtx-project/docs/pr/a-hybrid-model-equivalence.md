@@ -15,13 +15,13 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| `tools/rtx_model/build.sh` | 대상 리비전의 `tcp_rtx.h`, `include/linux/{rbtree,rbtree_augmented,list}.h`, `lib/rbtree.c`를 **수정 없이 복사**하고 `tcp_input.c`에서 `tcp_rbtree_insert()`를 그대로 잘라 와서 설정별 바이너리를 만든다. 입력 파일 SHA-256을 남긴다 |
+| `tools/rtx_model/build.sh` | 대상 리비전의 `tcp_rtx.h`, `include/linux/{rbtree,rbtree_augmented,list}.h`, `lib/rbtree.c`를 **수정 없이 복사**하고 `tcp_input.c`에서 `tcp_rbtree_insert()`를 그대로 잘라 와서 설정별 바이너리를 만든다. 입력 파일 SHA-256과, 바이너리마다 요청한 설정(`expected.conf`: hybrid·K·DEBUG·STATS·CACHE·TAIL)을 남긴다 |
 | `tools/rtx_model/shim/` | 커널 밖 의존성만 채우는 최소 헤더. `struct sk_buff`는 커널과 같이 `next/prev`·`rbnode`·`list`를 **한 union**에 둔다(한 쪽을 쓰면 다른 쪽이 깨지는 실제 구조). `tcp_sock` 필드와 `#ifdef`는 `include/linux/tcp.h`와 같다. `WARN_ON_ONCE`는 즉시 실패, `CONFIG_DEBUG_LIST` 검사 켬, `LIST_POISON`은 접근 시 segfault 나는 주소 |
 | `tools/rtx_model/harness.c` | trace 명령을 공개 `rtx_*` API로 실행하고 결과를 한 줄씩 출력. 매 명령 뒤 **하네스 자체 검사**: 레드-블랙 속성·부모 링크·트리 순서, 리스트 링크·순서·`rtx_recent_len`·K 상한, `rtx_tree_first/last` 캐시, STATS면 `rtx_count`, DEBUG면 `rtx_validate_structure()`. 해제된 skb는 링크 영역을 독으로 채워 재사용 시 바로 깨지게 한다 |
-| `tools/rtx_model/rtx_model.py` | **기준 모델**: 64비트 확장 시퀀스로 정렬한 Python 리스트(직렬번호 연산·rbtree·list 없음) + 설계 3.1/5.1/5.5의 T/L 소속 규칙을 K별로 추적. 필수 사례 시나리오 17개, 랜덤 trace 생성(크기 3종), 비교, 실패 trace 저장(`--fail-dir`), 경로 도달 집계 |
-| `tools/rtx_model/mutants.py` | `tcp_rtx.h`에 한 줄짜리 버그를 하나씩 넣어 빌드·실행하고 검출 여부 확인 (17종, 해당 코드가 없는 헤더는 N/A) |
+| `tools/rtx_model/rtx_model.py` | **기준 모델**: 64비트 확장 시퀀스로 정렬한 Python 리스트(직렬번호 연산·rbtree·list 없음) + 설계 3.1/5.1/5.5의 T/L 소속 규칙을 K별로 추적. 필수 사례 시나리오 17개, 랜덤 trace 생성(크기 3종), 비교, 실패 trace 저장(`--fail-dir`), 경로 도달 집계. 출력 비교 전에 바이너리의 `CONF` 줄을 `expected.conf`와 대조해, 이름과 다른 설정으로 빌드된 바이너리는 실패로 판정 |
+| `tools/rtx_model/mutants.py` | `tcp_rtx.h`에 한 줄짜리 버그를 하나씩 넣어 빌드·실행하고 검출 여부 확인 (17종, 해당 코드가 없는 헤더는 N/A). 빌드·실행되어 불일치가 난 변이만 KILLED. 변이 빌드 실패는 `BUILD_FAILED`와 컴파일러 출력을 남기고 전체 검사를 실패시킨다 |
 | `scripts/a_model_test.sh` | 증거 재생성: 빌드 → 시나리오 → 랜덤 → 변이. 맨 위에 날짜·기기·컴파일러·대상 SHA·도구 SHA 기록 |
-| `tests/test_a_rtx_model.py` | 기존 `unittest discover`에 들어가는 빠른 검사(시나리오 + 10 seed + 비교기 자체 음성 시험). 커널 소스가 없는 sparse clone·컴파일러 없음이면 skip |
+| `tests/test_a_rtx_model.py` | 기존 `unittest discover`에 들어가는 빠른 검사(시나리오 + 10 seed + 음성 시험 3개: 틀린 기대값, 설정이 바뀐 바이너리, 변이 빌드 실패). 커널 소스가 없는 sparse clone·컴파일러 없음이면 skip |
 
 trace 명령과 대응 API:
 
@@ -122,7 +122,9 @@ TAIL 전용 2개를 뺀 모든 변이가 **DEBUG·STATS off 빌드(`hyb-k4-plain
 | --- | --- |
 | 비교기 음성 시험 (기대값 한 줄을 틀리게) | 모든 빌드에서 실패로 판정 (`test_rejects_wrong_output`) |
 | 히스토그램 구간 함수(모델 쪽) | v1·v2 경계값 단위 시험 통과 |
-| `python3 -m unittest tests.test_a_rtx_model` | 4개 통과 |
+| 설정 대조 음성 시험 (`rb-plain`을 `rb` 이름으로 바꿔 실행) | `rb`만 실패, `CONF mismatch: debug=0 (want 1), stats=0 (want 1)` (`test_rejects_mislabeled_binary`) |
+| 변이 빌드 실패 음성 시험 (`CC=false`) | 모든 변이 `BUILD_FAILED`, KILLED 0, 종료 코드 1 (`test_mutant_build_failure_fails_check`) |
+| `python3 -m unittest tests.test_a_rtx_model` | 6개 통과. 새 음성 시험 2개는 수정 전 도구에서 실패함을 확인 |
 | `pyflakes`, `bash -n`, `git diff --check` | 경고·오류 없음 |
 | 커널 빌드·부팅 | 해당 없음 (커널 코드 변경 없음) |
 
@@ -142,6 +144,7 @@ TAIL 전용 2개를 뺀 모든 변이가 **DEBUG·STATS off 빌드(`hyb-k4-plain
 - 모델 `ordered()`가 새 노드를 넣은 **뒤** first(L)을 찾아 KeyError → 넣기 전에 찾도록 수정. 모델 쪽 버그였다.
 - PR #33은 `rtx_n_bucket()`을 STATS 밖에 정의해 STATS off 빌드에도 있다. 처음에는 STATS 여부로 기대값을 정해 3개 빌드가 불일치 → 하네스가 함수 존재 여부(`nbucket=1`)를 알려 주도록 수정.
 - B 문서 6.1의 "TREE tail 분할"이 시나리오에 명시적으로 없어(랜덤에만 있음) 추가했다.
+- B 리뷰(PR #35): ① `mutants.py`가 변이 빌드 실패를 KILLED로 세어 `CC=false`에서도 survived=0·종료 코드 0이었다 → 빌드 실패는 오류로 집계. ② 기대 설정을 바이너리 자신의 `CONF`에서 가져와 `rb-plain`을 `rb`로 바꿔도 failures=0이었다 → `build.sh`가 남긴 설정과 먼저 대조. 두 경우 모두 음성 시험으로 고정했다.
 - **커널 코드(main·#25·#33)에서 발견한 결함: 없음.**
 
 ## 7. 남은 작업과 한계
