@@ -1,0 +1,56 @@
+# A objdiff — TCP 오브젝트 기계어 비교
+date:        2026-11-23 13:50 KST
+device:      Claude 클라우드 x86_64 (x86_64)
+compiler:    gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+base:        0f2987d00 Merge pull request #33 from leesihyeong17/a/stats-v2
+target:      78ddfe845 chore: main 반영 merge — #21·#33과의 충돌 해결
+defconfig:   rtx_defconfig
+options:     CONFIG_TCP_RTX_DEBUG=0 CONFIG_TCP_RTX_STATS=0 -e TCP_RTX_HYBRID --set-val TCP_RTX_RECENT_MAX 16
+method:      objdump -d, 주소 제거 후 함수 단위 비교
+
+DIFF  net/ipv4/tcp.o               1f78bb49dc9e -> 751215476c51
+        changed: tcp_init_sock
+        changed: tcp_recvmsg
+        changed: tcp_write_queue_purge
+DIFF  net/ipv4/tcp_input.o         a5488f9a7e27 -> cd1c96e6b5a6
+        changed: tcp_ack
+        changed: tcp_any_retrans_done
+        changed: tcp_enter_loss
+        changed: tcp_mark_head_lost
+        changed: tcp_rcv_state_process
+        changed: tcp_rearm_rto
+        changed: tcp_sacktag_walk
+        changed: tcp_sacktag_write_queue
+        changed: tcp_shifted_skb
+        changed: tcp_simple_retransmit
+        changed: tcp_undo_cwnd_reduction
+DIFF  net/ipv4/tcp_output.o        c5632318bb3e -> e3b562ac4cd3
+        changed: __rtx_limit
+        changed: __tcp_retransmit_skb
+        changed: tcp_connect
+        changed: tcp_event_new_data_sent
+        changed: tcp_fragment
+        changed: tcp_schedule_loss_probe
+        changed: tcp_send_fin
+        changed: tcp_send_loss_probe
+        changed: tcp_send_synack
+        changed: tcp_write_xmit
+        changed: tcp_xmit_retransmit_queue.part.0
+DIFF  net/ipv4/tcp_ipv4.o          dce80661f200 -> d9ea54eebb89
+        changed: tcp_v4_err
+DIFF  net/ipv4/tcp_timer.o         22102f22ace1 -> 2e50c26557db
+        changed: tcp_retransmit_timer
+DIFF  net/ipv4/tcp_recovery.o      ba13dbba9763 -> 5030806306c9
+        changed: tcp_newreno_mark_lost
+DIFF  net/ipv4/tcp_minisocks.o     9d514edfe77c -> d3b3a256cae6
+        changed: tcp_create_openreq_child
+SAME  net/ipv6/tcp_ipv6.o          5e244033302d
+
+result: 1 / 8 SAME
+
+## 해석 (오프셋 마스크 비교)
+DIFF 원인: #25가 struct tcp_sock에서 rtx_recent_len을 rtx_tree_first/last 앞으로 옮겨
+(HYBRID 전용 → CACHE 공통 필드 분리) 필드 오프셋 0x898/0x8a0/0x8a8이 바뀜.
+확인: 두 쪽 디스어셈블리에서 0x88?·0x89?·0x8a? 변위를 OFF로 바꾸고 줄 단위 정렬 비교 → 8/8 동일.
+같은 설정의 PR #25 head(4e204ff) vs merge는 마스크 없이 8/8 SAME (objdiff_hyb16_pr25_vs_merge_ref.txt)
+→ merge가 만든 기계어 변화 없음. main 대비 차이는 전부 #25의 필드 배치 변경.

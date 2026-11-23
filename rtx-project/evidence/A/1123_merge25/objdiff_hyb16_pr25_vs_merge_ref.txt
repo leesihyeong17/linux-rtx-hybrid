@@ -1,0 +1,20 @@
+# A objdiff — TCP 오브젝트 기계어 비교
+date:        2026-11-23 13:50 KST
+device:      Claude 클라우드 x86_64 (x86_64)
+compiler:    gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+base:        4e204ffda docs: #25 PR과 검증 커밋 연결
+target:      78ddfe845 chore: main 반영 merge — #21·#33과의 충돌 해결
+defconfig:   rtx_defconfig
+options:     CONFIG_TCP_RTX_DEBUG=0 CONFIG_TCP_RTX_STATS=0 -e TCP_RTX_HYBRID --set-val TCP_RTX_RECENT_MAX 16
+method:      objdump -d, 주소 제거 후 함수 단위 비교
+
+SAME  net/ipv4/tcp.o               751215476c51
+SAME  net/ipv4/tcp_input.o         cd1c96e6b5a6
+SAME  net/ipv4/tcp_output.o        e3b562ac4cd3
+SAME  net/ipv4/tcp_ipv4.o          d9ea54eebb89
+SAME  net/ipv4/tcp_timer.o         2e50c26557db
+SAME  net/ipv4/tcp_recovery.o      5030806306c9
+SAME  net/ipv4/tcp_minisocks.o     d3b3a256cae6
+SAME  net/ipv6/tcp_ipv6.o          5e244033302d
+
+result: 8 / 8 SAME

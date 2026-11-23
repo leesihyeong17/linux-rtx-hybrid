@@ -1,0 +1,13 @@
+# merge 78ddfe8 설정 조합 빌드 (net/ipv4/ 전체 + net/ipv6/tcp_ipv6.o)
+date: 2026-11-23, Claude 클라우드 x86_64, gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, base rtx_defconfig + scripts/config
+warnings_all = 빌드 로그의 warning/error 줄 수 (전부 scripts/extract-cert.c·sign-file.c OpenSSL 3.0 deprecated 호스트 도구 경고)
+warnings_tcp_rtx = 그중 tcp/rtx 파일 경고
+tailonly_check = CACHE 없이 TAIL만 켠 경우: olddefconfig가 TAIL을 조용히 제거함 (리뷰 제안 1 재현)
+
+v4_dbg_stats rc=0 warnings_all=14 warnings_tcp_rtx=0 :: CONFIG_TCP_RTX_CACHE=y CONFIG_TCP_RTX_TAIL=y CONFIG_TCP_RTX_HYBRID=y CONFIG_TCP_RTX_RECENT_MAX=16 CONFIG_TCP_RTX_DEBUG=y CONFIG_TCP_RTX_STATS=y
+v3_dbg_stats rc=0 warnings_all=14 warnings_tcp_rtx=0 :: CONFIG_TCP_RTX_CACHE=y CONFIG_TCP_RTX_TAIL=y # CONFIG_TCP_RTX_HYBRID is not set CONFIG_TCP_RTX_DEBUG=y CONFIG_TCP_RTX_STATS=y
+v2_dbg_stats rc=0 warnings_all=14 warnings_tcp_rtx=0 :: CONFIG_TCP_RTX_CACHE=y # CONFIG_TCP_RTX_TAIL is not set # CONFIG_TCP_RTX_HYBRID is not set CONFIG_TCP_RTX_DEBUG=y CONFIG_TCP_RTX_STATS=y
+v4_off rc=0 warnings_all=14 warnings_tcp_rtx=0 :: CONFIG_TCP_RTX_CACHE=y CONFIG_TCP_RTX_TAIL=y CONFIG_TCP_RTX_HYBRID=y CONFIG_TCP_RTX_RECENT_MAX=16 # CONFIG_TCP_RTX_DEBUG is not set # CONFIG_TCP_RTX_STATS is not set
+v3_off rc=0 warnings_all=14 warnings_tcp_rtx=0 :: CONFIG_TCP_RTX_CACHE=y CONFIG_TCP_RTX_TAIL=y # CONFIG_TCP_RTX_HYBRID is not set # CONFIG_TCP_RTX_DEBUG is not set # CONFIG_TCP_RTX_STATS is not set
+tailonly_check rc=0 warnings_all=14 warnings_tcp_rtx=0 :: # CONFIG_TCP_RTX_CACHE is not set # CONFIG_TCP_RTX_HYBRID is not set # CONFIG_TCP_RTX_DEBUG is not set # CONFIG_TCP_RTX_STATS is not set
+ALLDONE
