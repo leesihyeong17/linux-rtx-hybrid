@@ -1,0 +1,352 @@
+DS uname 5.4.214+
+DS iter 1
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 2
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 3
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 4
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 5
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 6
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 7
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 8
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 9
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 10
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 11
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 12
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 13
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 14
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 15
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 16
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 17
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 18
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 19
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 20
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 21
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 22
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 23
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 24
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 25
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS done
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=2661644810 rtt_us=300 sacked=0 xmit=1009978
+RACKDBG advance end_seq=2661646810 rtt_us=258 sacked=0 xmit=1010526
+RACKDBG advance end_seq=2661647810 rtt_us=258 sacked=0 xmit=1010526
+RACKDBG detect seq=2661644810 reo_wnd=128 rack_rtt=258 age=258 remaining=128 ca=0 sacked_out=2
+RACKDBG detect seq=2661644810 reo_wnd=128 rack_rtt=258 age=13898 remaining=-13512 ca=1 sacked_out=2
+RACKDBG advance end_seq=2661645810 rtt_us=8785 sacked=96 xmit=1024424
+RACKDBG advance end_seq=2661648810 rtt_us=22683 sacked=0 xmit=1010526
+RACKDBG advance end_seq=2661648811 rtt_us=311 sacked=0 xmit=1044852
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=927817549 rtt_us=329 sacked=0 xmit=1422024
+RACKDBG advance end_seq=927819549 rtt_us=213 sacked=0 xmit=1422703
+RACKDBG advance end_seq=927820549 rtt_us=213 sacked=0 xmit=1422703
+RACKDBG detect seq=927817549 reo_wnd=106 rack_rtt=213 age=213 remaining=106 ca=0 sacked_out=2
+RACKDBG detect seq=927817549 reo_wnd=106 rack_rtt=213 age=13693 remaining=-13374 ca=1 sacked_out=2
+RACKDBG advance end_seq=927818549 rtt_us=8694 sacked=96 xmit=1436396
+RACKDBG advance end_seq=927821549 rtt_us=22387 sacked=0 xmit=1422703
+RACKDBG advance end_seq=927821550 rtt_us=332 sacked=0 xmit=1456898
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=4239180314 rtt_us=534 sacked=0 xmit=1830462
+RACKDBG advance end_seq=4239182314 rtt_us=341 sacked=0 xmit=1831581
+RACKDBG advance end_seq=4239183314 rtt_us=341 sacked=0 xmit=1831581
+RACKDBG detect seq=4239180314 reo_wnd=170 rack_rtt=341 age=341 remaining=170 ca=0 sacked_out=2
+RACKDBG detect seq=4239180314 reo_wnd=170 rack_rtt=341 age=12846 remaining=-12335 ca=1 sacked_out=2
+RACKDBG advance end_seq=4239181314 rtt_us=8805 sacked=96 xmit=1844427
+RACKDBG advance end_seq=4239184314 rtt_us=21651 sacked=0 xmit=1831581
+RACKDBG advance end_seq=4239184315 rtt_us=371 sacked=0 xmit=1864997
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=954681928 rtt_us=273 sacked=0 xmit=2229807
+RACKDBG advance end_seq=954683928 rtt_us=219 sacked=0 xmit=2230302
+RACKDBG advance end_seq=954684928 rtt_us=219 sacked=0 xmit=2230302
+RACKDBG detect seq=954681928 reo_wnd=108 rack_rtt=219 age=219 remaining=108 ca=0 sacked_out=2
+RACKDBG detect seq=954681928 reo_wnd=108 rack_rtt=219 age=14075 remaining=-13748 ca=1 sacked_out=2
+RACKDBG advance end_seq=954682928 rtt_us=8680 sacked=96 xmit=2244377
+RACKDBG advance end_seq=954685928 rtt_us=22755 sacked=0 xmit=2230302
+RACKDBG advance end_seq=954685929 rtt_us=660 sacked=0 xmit=2264867
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=1281080029 rtt_us=434 sacked=0 xmit=2622631
+RACKDBG advance end_seq=1281082029 rtt_us=384 sacked=0 xmit=2623394
+RACKDBG advance end_seq=1281083029 rtt_us=384 sacked=0 xmit=2623394
+RACKDBG detect seq=1281080029 reo_wnd=192 rack_rtt=384 age=384 remaining=192 ca=0 sacked_out=2
+RACKDBG detect seq=1281080029 reo_wnd=192 rack_rtt=384 age=13029 remaining=-12453 ca=1 sacked_out=2
+RACKDBG advance end_seq=1281081029 rtt_us=8862 sacked=96 xmit=2636423
+RACKDBG advance end_seq=1281084029 rtt_us=21891 sacked=0 xmit=2623394
+RACKDBG advance end_seq=1281084030 rtt_us=372 sacked=0 xmit=2657061
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=2975208638 rtt_us=373 sacked=0 xmit=3022195
+RACKDBG advance end_seq=2975210638 rtt_us=252 sacked=0 xmit=3022797
+RACKDBG advance end_seq=2975211638 rtt_us=252 sacked=0 xmit=3022797
+RACKDBG detect seq=2975208638 reo_wnd=126 rack_rtt=252 age=252 remaining=126 ca=0 sacked_out=2
+RACKDBG detect seq=2975208638 reo_wnd=126 rack_rtt=252 age=13630 remaining=-13252 ca=1 sacked_out=2
+RACKDBG advance end_seq=2975209638 rtt_us=8939 sacked=96 xmit=3036427
+RACKDBG advance end_seq=2975212638 rtt_us=22569 sacked=0 xmit=3022797
+RACKDBG advance end_seq=2975212639 rtt_us=317 sacked=0 xmit=3056910
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=738142471 rtt_us=282 sacked=0 xmit=3413869
+RACKDBG advance end_seq=738144471 rtt_us=294 sacked=0 xmit=3414347
+RACKDBG advance end_seq=738145471 rtt_us=294 sacked=0 xmit=3414347
+RACKDBG detect seq=738142471 reo_wnd=140 rack_rtt=294 age=294 remaining=140 ca=0 sacked_out=2
+RACKDBG detect seq=738142471 reo_wnd=140 rack_rtt=294 age=14045 remaining=-13611 ca=1 sacked_out=2
+RACKDBG advance end_seq=738143471 rtt_us=8675 sacked=96 xmit=3428392
+RACKDBG advance end_seq=738146471 rtt_us=22720 sacked=0 xmit=3414347
+RACKDBG advance end_seq=738146472 rtt_us=422 sacked=0 xmit=3449087
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=1818012488 rtt_us=464 sacked=0 xmit=3814557
+RACKDBG advance end_seq=1818014488 rtt_us=335 sacked=0 xmit=3815346
+RACKDBG advance end_seq=1818015488 rtt_us=335 sacked=0 xmit=3815346
+RACKDBG detect seq=1818012488 reo_wnd=166 rack_rtt=335 age=335 remaining=166 ca=0 sacked_out=2
+RACKDBG detect seq=1818012488 reo_wnd=166 rack_rtt=335 age=13039 remaining=-12538 ca=1 sacked_out=2
+RACKDBG advance end_seq=1818013488 rtt_us=9040 sacked=96 xmit=3828385
+RACKDBG advance end_seq=1818016488 rtt_us=22079 sacked=0 xmit=3815346
+RACKDBG advance end_seq=1818016489 rtt_us=421 sacked=0 xmit=3849072
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=3168541872 rtt_us=327 sacked=0 xmit=4213999
+RACKDBG advance end_seq=3168543872 rtt_us=285 sacked=0 xmit=4214779
+RACKDBG advance end_seq=3168544872 rtt_us=285 sacked=0 xmit=4214779
+RACKDBG detect seq=3168541872 reo_wnd=142 rack_rtt=285 age=285 remaining=142 ca=0 sacked_out=2
+RACKDBG detect seq=3168541872 reo_wnd=142 rack_rtt=285 age=13816 remaining=-13389 ca=1 sacked_out=2
+RACKDBG advance end_seq=3168542872 rtt_us=8585 sacked=96 xmit=4228595
+RACKDBG advance end_seq=3168545872 rtt_us=22401 sacked=0 xmit=4214779
+RACKDBG advance end_seq=3168545873 rtt_us=321 sacked=0 xmit=4248965
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=3163647528 rtt_us=349 sacked=0 xmit=4613812
+RACKDBG advance end_seq=3163649528 rtt_us=265 sacked=0 xmit=4614376
+RACKDBG advance end_seq=3163650528 rtt_us=265 sacked=0 xmit=4614376
+RACKDBG detect seq=3163647528 reo_wnd=132 rack_rtt=265 age=265 remaining=132 ca=0 sacked_out=2
+RACKDBG detect seq=3163647528 reo_wnd=132 rack_rtt=265 age=14047 remaining=-13650 ca=1 sacked_out=2
+RACKDBG advance end_seq=3163648528 rtt_us=8784 sacked=96 xmit=4628423
+RACKDBG advance end_seq=3163651528 rtt_us=22831 sacked=0 xmit=4614376
+RACKDBG advance end_seq=3163651529 rtt_us=302 sacked=0 xmit=4648926
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=451884760 rtt_us=313 sacked=0 xmit=5006055
+RACKDBG advance end_seq=451886760 rtt_us=210 sacked=0 xmit=5006626
+RACKDBG advance end_seq=451887760 rtt_us=210 sacked=0 xmit=5006626
+RACKDBG detect seq=451884760 reo_wnd=104 rack_rtt=210 age=210 remaining=104 ca=0 sacked_out=2
+RACKDBG detect seq=451884760 reo_wnd=104 rack_rtt=210 age=13877 remaining=-13563 ca=1 sacked_out=2
+RACKDBG advance end_seq=451885760 rtt_us=8838 sacked=96 xmit=5020503
+RACKDBG advance end_seq=451888760 rtt_us=22715 sacked=0 xmit=5006626
+RACKDBG advance end_seq=451888761 rtt_us=377 sacked=0 xmit=5041406
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=4128468108 rtt_us=525 sacked=0 xmit=5418858
+RACKDBG advance end_seq=4128470108 rtt_us=336 sacked=0 xmit=5419709
+RACKDBG advance end_seq=4128471108 rtt_us=336 sacked=0 xmit=5419709
+RACKDBG detect seq=4128468108 reo_wnd=168 rack_rtt=336 age=336 remaining=168 ca=0 sacked_out=2
+RACKDBG detect seq=4128468108 reo_wnd=168 rack_rtt=336 age=12737 remaining=-12233 ca=1 sacked_out=2
+RACKDBG advance end_seq=4128469108 rtt_us=8978 sacked=96 xmit=5432446
+RACKDBG advance end_seq=4128472108 rtt_us=21715 sacked=0 xmit=5419709
+RACKDBG advance end_seq=4128472109 rtt_us=364 sacked=0 xmit=5453163
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=407927805 rtt_us=472 sacked=0 xmit=5818686
+RACKDBG advance end_seq=407929805 rtt_us=337 sacked=0 xmit=5819437
+RACKDBG advance end_seq=407930805 rtt_us=337 sacked=0 xmit=5819437
+RACKDBG detect seq=407927805 reo_wnd=168 rack_rtt=337 age=337 remaining=168 ca=0 sacked_out=2
+RACKDBG detect seq=407927805 reo_wnd=168 rack_rtt=337 age=13110 remaining=-12605 ca=1 sacked_out=2
+RACKDBG advance end_seq=407928805 rtt_us=8855 sacked=96 xmit=5832547
+RACKDBG advance end_seq=407931805 rtt_us=21965 sacked=0 xmit=5819437
+RACKDBG advance end_seq=407931806 rtt_us=412 sacked=0 xmit=5853084
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=2200388003 rtt_us=527 sacked=0 xmit=6218438
+RACKDBG advance end_seq=2200390003 rtt_us=320 sacked=0 xmit=6219299
+RACKDBG advance end_seq=2200391003 rtt_us=320 sacked=0 xmit=6219299
+RACKDBG detect seq=2200388003 reo_wnd=160 rack_rtt=320 age=320 remaining=160 ca=0 sacked_out=2
+RACKDBG detect seq=2200388003 reo_wnd=160 rack_rtt=320 age=13182 remaining=-12702 ca=1 sacked_out=2
+RACKDBG advance end_seq=2200389003 rtt_us=9085 sacked=96 xmit=6232481
+RACKDBG advance end_seq=2200392003 rtt_us=22267 sacked=0 xmit=6219299
+RACKDBG advance end_seq=2200392004 rtt_us=643 sacked=0 xmit=6254334
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=1665537105 rtt_us=352 sacked=0 xmit=6622066
+RACKDBG advance end_seq=1665539105 rtt_us=283 sacked=0 xmit=6622820
+RACKDBG advance end_seq=1665540105 rtt_us=283 sacked=0 xmit=6622820
+RACKDBG detect seq=1665537105 reo_wnd=140 rack_rtt=283 age=283 remaining=140 ca=0 sacked_out=2
+RACKDBG detect seq=1665537105 reo_wnd=140 rack_rtt=283 age=13679 remaining=-13256 ca=1 sacked_out=2
+RACKDBG advance end_seq=1665538105 rtt_us=9215 sacked=96 xmit=6636499
+RACKDBG advance end_seq=1665541105 rtt_us=22894 sacked=0 xmit=6622820
+RACKDBG advance end_seq=1665541106 rtt_us=273 sacked=0 xmit=6657119
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=3299701736 rtt_us=414 sacked=0 xmit=7038391
+RACKDBG advance end_seq=3299703736 rtt_us=257 sacked=0 xmit=7039034
+RACKDBG advance end_seq=3299704736 rtt_us=257 sacked=0 xmit=7039034
+RACKDBG detect seq=3299701736 reo_wnd=128 rack_rtt=257 age=257 remaining=128 ca=0 sacked_out=2
+RACKDBG detect seq=3299701736 reo_wnd=128 rack_rtt=257 age=13422 remaining=-13037 ca=1 sacked_out=2
+RACKDBG advance end_seq=3299702736 rtt_us=8894 sacked=96 xmit=7052456
+RACKDBG advance end_seq=3299705736 rtt_us=22316 sacked=0 xmit=7039034
+RACKDBG advance end_seq=3299705737 rtt_us=319 sacked=0 xmit=7073044
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=1837831945 rtt_us=303 sacked=0 xmit=7450162
+RACKDBG advance end_seq=1837833945 rtt_us=256 sacked=0 xmit=7450724
+RACKDBG advance end_seq=1837834945 rtt_us=256 sacked=0 xmit=7450724
+RACKDBG detect seq=1837831945 reo_wnd=128 rack_rtt=256 age=256 remaining=128 ca=0 sacked_out=2
+RACKDBG detect seq=1837831945 reo_wnd=128 rack_rtt=256 age=13743 remaining=-13359 ca=1 sacked_out=2
+RACKDBG advance end_seq=1837832945 rtt_us=8704 sacked=96 xmit=7464467
+RACKDBG advance end_seq=1837835945 rtt_us=22447 sacked=0 xmit=7450724
+RACKDBG advance end_seq=1837835946 rtt_us=383 sacked=0 xmit=7485173
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=3472253269 rtt_us=320 sacked=0 xmit=7857996
+RACKDBG advance end_seq=3472255269 rtt_us=209 sacked=0 xmit=7858568
+RACKDBG advance end_seq=3472256269 rtt_us=209 sacked=0 xmit=7858568
+RACKDBG detect seq=3472253269 reo_wnd=104 rack_rtt=209 age=209 remaining=104 ca=0 sacked_out=2
+RACKDBG detect seq=3472253269 reo_wnd=104 rack_rtt=209 age=13879 remaining=-13566 ca=1 sacked_out=2
+RACKDBG advance end_seq=3472254269 rtt_us=8652 sacked=96 xmit=7872447
+RACKDBG advance end_seq=3472257269 rtt_us=22531 sacked=0 xmit=7858568
+RACKDBG advance end_seq=3472257270 rtt_us=301 sacked=0 xmit=7892945
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=1560427736 rtt_us=508 sacked=0 xmit=8266299
+RACKDBG advance end_seq=1560429736 rtt_us=269 sacked=0 xmit=8267060
+RACKDBG advance end_seq=1560430736 rtt_us=269 sacked=0 xmit=8267060
+RACKDBG detect seq=1560427736 reo_wnd=134 rack_rtt=269 age=269 remaining=134 ca=0 sacked_out=2
+RACKDBG detect seq=1560427736 reo_wnd=134 rack_rtt=269 age=13412 remaining=-13009 ca=1 sacked_out=2
+RACKDBG advance end_seq=1560428736 rtt_us=8732 sacked=96 xmit=8280472
+RACKDBG advance end_seq=1560431736 rtt_us=22144 sacked=0 xmit=8267060
+RACKDBG advance end_seq=1560431737 rtt_us=331 sacked=0 xmit=8300991
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=4169887389 rtt_us=340 sacked=0 xmit=8682294
+RACKDBG advance end_seq=4169889389 rtt_us=217 sacked=0 xmit=8682847
+RACKDBG advance end_seq=4169890389 rtt_us=217 sacked=0 xmit=8682847
+RACKDBG detect seq=4169887389 reo_wnd=108 rack_rtt=217 age=217 remaining=108 ca=0 sacked_out=2
+RACKDBG detect seq=4169887389 reo_wnd=108 rack_rtt=217 age=13673 remaining=-13348 ca=1 sacked_out=2
+RACKDBG advance end_seq=4169888389 rtt_us=8741 sacked=96 xmit=8696520
+RACKDBG advance end_seq=4169891389 rtt_us=22414 sacked=0 xmit=8682847
+RACKDBG advance end_seq=4169891390 rtt_us=299 sacked=0 xmit=8716983
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=4252031445 rtt_us=363 sacked=0 xmit=9086081
+RACKDBG advance end_seq=4252033445 rtt_us=212 sacked=0 xmit=9086747
+RACKDBG advance end_seq=4252034445 rtt_us=212 sacked=0 xmit=9086747
+RACKDBG detect seq=4252031445 reo_wnd=106 rack_rtt=212 age=212 remaining=106 ca=0 sacked_out=2
+RACKDBG detect seq=4252031445 reo_wnd=106 rack_rtt=212 age=13806 remaining=-13488 ca=1 sacked_out=2
+RACKDBG advance end_seq=4252032445 rtt_us=8630 sacked=96 xmit=9100553
+RACKDBG advance end_seq=4252035445 rtt_us=22436 sacked=0 xmit=9086747
+RACKDBG advance end_seq=4252035446 rtt_us=283 sacked=0 xmit=9121919
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=1060327990 rtt_us=508 sacked=0 xmit=9502891
+RACKDBG advance end_seq=1060329990 rtt_us=290 sacked=0 xmit=9503723
+RACKDBG advance end_seq=1060330990 rtt_us=290 sacked=0 xmit=9503723
+RACKDBG detect seq=1060327990 reo_wnd=144 rack_rtt=290 age=290 remaining=144 ca=0 sacked_out=2
+RACKDBG detect seq=1060327990 reo_wnd=144 rack_rtt=290 age=12823 remaining=-12389 ca=1 sacked_out=2
+RACKDBG advance end_seq=1060328990 rtt_us=9194 sacked=96 xmit=9516546
+RACKDBG advance end_seq=1060331990 rtt_us=22017 sacked=0 xmit=9503723
+RACKDBG advance end_seq=1060331991 rtt_us=372 sacked=0 xmit=9537209
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=3561724092 rtt_us=483 sacked=0 xmit=9898195
+RACKDBG advance end_seq=3561726092 rtt_us=257 sacked=0 xmit=9898932
+RACKDBG advance end_seq=3561727092 rtt_us=257 sacked=0 xmit=9898932
+RACKDBG detect seq=3561724092 reo_wnd=128 rack_rtt=257 age=257 remaining=128 ca=0 sacked_out=2
+RACKDBG detect seq=3561724092 reo_wnd=128 rack_rtt=257 age=13603 remaining=-13218 ca=1 sacked_out=2
+RACKDBG advance end_seq=3561725092 rtt_us=8691 sacked=96 xmit=9912535
+RACKDBG advance end_seq=3561728092 rtt_us=22294 sacked=0 xmit=9898932
+RACKDBG advance end_seq=3561728093 rtt_us=311 sacked=0 xmit=9933048
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=760955379 rtt_us=314 sacked=0 xmit=10306721
+RACKDBG advance end_seq=760957379 rtt_us=498 sacked=0 xmit=10307402
+RACKDBG advance end_seq=760958379 rtt_us=498 sacked=0 xmit=10307402
+RACKDBG detect seq=760955379 reo_wnd=156 rack_rtt=498 age=498 remaining=156 ca=0 sacked_out=2
+RACKDBG detect seq=760955379 reo_wnd=156 rack_rtt=498 age=13124 remaining=-12470 ca=1 sacked_out=2
+RACKDBG advance end_seq=760956379 rtt_us=8687 sacked=96 xmit=10320526
+RACKDBG advance end_seq=760959379 rtt_us=21811 sacked=0 xmit=10307402
+RACKDBG advance end_seq=760959380 rtt_us=304 sacked=0 xmit=10341075
+RTX_MARK CASE DSACK_OFO
+RACKDBG advance end_seq=882635789 rtt_us=462 sacked=0 xmit=10702104
+RACKDBG advance end_seq=882637789 rtt_us=248 sacked=0 xmit=10702783
+RACKDBG advance end_seq=882638789 rtt_us=248 sacked=0 xmit=10702783
+RACKDBG detect seq=882635789 reo_wnd=124 rack_rtt=248 age=248 remaining=124 ca=0 sacked_out=2
+RACKDBG detect seq=882635789 reo_wnd=124 rack_rtt=248 age=13752 remaining=-13380 ca=1 sacked_out=2
+RACKDBG advance end_seq=882636789 rtt_us=8863 sacked=96 xmit=10716535
+RACKDBG advance end_seq=882639789 rtt_us=22615 sacked=0 xmit=10702783
+RACKDBG advance end_seq=882639790 rtt_us=394 sacked=0 xmit=10737207
