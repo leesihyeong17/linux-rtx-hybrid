@@ -1,6 +1,6 @@
 # A 도메인(Core) 구현 기록
 
-최초 작성: 2026-11-10 · 최종 갱신: 2026-11-16
+최초 작성: 2026-11-10 · 최종 갱신: 2026-11-23
 
 A는 재전송 큐의 공통 API(`rtx_*`), 자료구조, 불변식 검증, 초기화·정리 경로와 통합 브랜치를 담당한다. 이 문서는 A의 구현 범위, 계약, 검증 결과와 한계를 B·C·D가 확인할 수 있도록 기록한다. 중요 작업이 끝날 때마다 3절에 항목을 추가하고 1절·6절의 상태를 갱신한다.
 
@@ -24,10 +24,10 @@ A는 재전송 큐의 공통 API(`rtx_*`), 자료구조, 불변식 검증, 초�
 | RB split API + 디버그 자체 테스트 | `0b15ec3` (PR #9) | main 머지 |
 | 직접 접근 정리 (`tcp.c` init·purge) | `4fe3558` (PR #10) | main 머지 |
 | 측정 카운터 + N 히스토그램 + `rtx_prefetch` | `fa64aca` (PR #12) | main 머지 |
-| STATS v2 (ACK 시점 N, 1 단위 버킷, 포트 필터) | `a/stats-v2` | PR 대기. [PR 문서](pr/a-stats-v2.md) |
+| STATS v2 (ACK 시점 N, 1 단위 버킷, 포트 필터) | `0f2987d` (PR #33) | main 머지. [PR 문서](pr/a-stats-v2.md) |
 | merge·trim 계약(③) | `73747d3` (PR #17, B 구현) | `rtx_shift_token`으로 대체. 계약은 2.5절 |
 | RB용 merge API | — | 만들지 않음. PR #17의 `rtx_shift_token`이 같은 역할 (2.5절) |
-| 하이브리드 모델·`rtx_validate()` | — | 미착수 |
+| 사용자 공간 모델 동등성 테스트 (설계 11.1) | `a/hybrid-model` | PR 대기. main(PR #33 포함)·PR #25 헤더 모두 불일치 0 (3.9절) |
 | 커널 하이브리드 backend | `73747d3` (PR #17, #14) | main 머지. LIST·승격·캐시·split·shift token·replace·child 초기화 구현 (B). A는 사후 리뷰 |
 
 #14의 최신 API 변경, 설계 선택과 실제 검증 범위는 [대표 작업 문서](pr/issue-14-list-promotion-integration.md)에 기록한다. 아래 기존 RB 표·계약과 과거 실행 결과는 당시 기준이다. `rtx_validate_structure()`는 구조 검사만 제공하며 범용 TCP validator나 전체 하이브리드 모델 검증의 완료를 뜻하지 않는다.
@@ -251,6 +251,17 @@ B·D가 N 측정 전에 지적한 세 가지를 반영했다. 상세는 [PR 문�
 - L 승격 전 제거 비율은 기존 카운터로 계산한다(`unlink_list / (unlink_list + promote)`, A_N_HISTOGRAM 3절).
 - D의 N 수집기(`run_arm64_n_distribution.py`, PR #29)가 v1 형식만 받아서, v1·v2를 모두 읽고 v2에서는 포트 5001 필터를 쓰도록 고쳤다(2026-11-23). 시도마다 `n_link` = 삽입, `n_ack` = `ack_clean`을 검사한다.
 
+### 3.9 사용자 공간 모델 동등성 테스트 (`a/hybrid-model`, 2026-11-23)
+
+설계 11.1의 모델 테스트. 상세(대안, 변이 목록, 경로 도달 표, 한계)는 [대표 문서](pr/a-hybrid-model-equivalence.md).
+
+- **무엇을 검사하나**: 실제 `include/net/tcp_rtx.h`와 `lib/rbtree.c`·`rbtree.h`·`list.h`·`tcp_rbtree_insert()`를 수정 없이 사용자 공간에서 컴파일한 것(`tools/rtx_model/`). shim은 커널 밖 의존성만 채우며, `sk_buff`의 `rbnode`/`list` union은 커널과 같다.
+- **무엇과 비교하나**: 커널 코드와 독립인 기준 모델 — 64비트 확장 시퀀스로 정렬한 리스트 + 설계 3.1/5.1/5.5의 T/L 소속 규칙(K별). 매 명령 뒤 첫·끝, 정·역순회, 소속, `find_cover`, 범위 검색(`OVERLAP`, 하네스 전용) 결과를 비교하고, 하네스가 레드-블랙 속성·부모 링크·리스트 링크·캐시·`rtx_recent_len`·`rtx_count`를 따로 검사한다. STATS 빌드는 카운터와 N 히스토그램(v1 `n_hist`, v2 `n_link`·`rtx_n_bucket()`)도 정확히 비교한다.
+- **설정**: RB, 하이브리드 K = 1·2·4·16, DEBUG+STATS on/off. 헤더에 `CONFIG_TCP_RTX_CACHE`가 있으면(PR #25) V2(`rb-cache`)·V3(`rb-tail`)·V4(`hyb-kN-tail`)도 만든다.
+- **판정기 확인**: `tcp_rtx.h`에 한 줄 버그 17종을 넣어 모두 검출됨을 확인했다(해당 코드가 없는 헤더는 N/A). TAIL 전용을 뺀 모든 변이가 DEBUG off 빌드에서도 잡힌다. shift commit에서 token 대신 변이 후 seq로 소속을 다시 판정하는 변이는 T 끝 + first(L) 병합에서 큐를 깨뜨린다 → 설계 3.3 token 규칙의 근거.
+- 재현: `scripts/a_model_test.sh [-s 0:5000] [-m 0:200] [-o LOG] REV`. 빠른 검사는 `tests/test_a_rtx_model.py`(기존 `unittest discover`에 포함, sparse clone이면 skip).
+- 커널에서 발견한 결함: 없음.
+
 ### 3.7 C와의 결정 사항 (2026-11-11)
 
 | 주제 | 결정 |
@@ -300,6 +311,9 @@ B·D가 N 측정 전에 지적한 세 가지를 반영했다. 상세는 [PR 문�
 | 3.8 STATS v2 | STATS만(RB), DEBUG+STATS(하이브리드) tcp 오브젝트 빌드 | 같음 | 경고·오류 0. checkpatch 0/0 |
 | 3.8 STATS v2 | QEMU 부팅: 자체 테스트, 다른 포트 차단, `n_link`·`n_ack` 합계, 잘못된 입력 거부 (RB, 하이브리드 K=16) | gcc 13.3, QEMU TCG, tinyconfig, 루프백 | 둘 다 PASS → [A_N_HISTOGRAM 4.1절](A_N_HISTOGRAM.md#41-정확성-확인-qemu-성능-수치-아님) |
 | 3.6 카운터 | DEBUG+STATS 커널 QEMU 부팅 + 루프백 100MB 전송 후 `/proc/rtx_stats` | gcc 13.3, QEMU 1 vCPU, busybox initramfs | 자체 테스트 512 통과·0 실패. 200MB 송수신 일치. `insert_append` 6368 + `insert_ordered` 1(SYN) = `unlink_tree` 6369, `n_hist` 합계 6369. WARNING 0 |
+| 3.9 모델 | main `ffd6e62`(PR #33 전): 시나리오 17개 + 랜덤 seed 0~4999 (명령 13,308,809개) × 8개 빌드, 변이 검사 | 클라우드 x86_64, gcc 13.3, 사용자 공간 | 불일치 0, 카운터·`n_hist` 일치, 변이 14/14 검출 (3개 N/A) → [`evidence/A/1123_model_ffd6e62.txt`](../evidence/A/1123_model_ffd6e62.txt) |
+| 3.9 모델 | PR #33 `5a75c90` 헤더 (= 현재 main `0f2987d`의 `tcp_rtx.h`), seed 0~1999 | 같음 | 불일치 0, 카운터·`n_link`·`rtx_n_bucket` 일치, 변이 15/15 검출 → [`1123_model_5a75c90.txt`](../evidence/A/1123_model_5a75c90.txt) |
+| 3.9 모델 | PR #25 `4e204ff` 헤더, 14개 빌드(V2·V3·V4 포함), seed 0~1999 | 같음 | 불일치 0 (시나리오 + 명령 5,323,293개), 변이 16/16 검출 → [`1123_model_4e204ff.txt`](../evidence/A/1123_model_4e204ff.txt) |
 
 한계:
 
@@ -310,6 +324,7 @@ B·D가 N 측정 전에 지적한 세 가지를 반영했다. 상세는 [PR 문�
 - 실제 커널에서의 TCP 송수신·재전송·SACK 회귀와 성능 측정은 미실행.
 - 카운터의 실제 트래픽 검증은 무손실 루프백 1개 조건뿐이다. 이때 N은 대부분 1~3(1-1: 3169, 2-3: 3170, 4-31: 30)이었지만, 루프백은 RTT가 거의 0이라 실제 조건의 N 분포로 해석하지 않는다. 테스트용 송수신 프로그램은 busybox `nc`가 5KB만 보내고 끝나서 직접 작성했다. 손실·SACK 경로의 카운터(`find_cover` 등)와 C의 호출부 카운터는 미검증이다.
 - QEMU 부팅 커널은 root fs 없이 부팅해 자체 테스트 후 마운트 단계에서 멈춘다. 이는 의도한 동작이다.
+- 3.9 모델 테스트는 어댑터 **구조**만 검증한다. TCP 회계·힌트·tsorted·pcount·할당 실패와 동시성은 모델에 없다. 단일 스레드 사용자 공간 실행이며 STATS v2 포트 필터는 `port 0`만 실행했다.
 
 ## 6. 팀원 작업과의 연동
 
@@ -332,7 +347,7 @@ B·D가 N 측정 전에 지적한 세 가지를 반영했다. 상세는 [PR 문�
 | 2 | N 분포 측정 | STATS v2(3.8) 머지, D 측정 기기 | 6개 조건별 `n_ack`·`n_link` 기록 → [A_N_HISTOGRAM.md](A_N_HISTOGRAM.md) 4.2절 |
 | 3 | merge·trim 계약(③) 초안 | — | 완료. PR #17 구현 기준으로 2.5절에 기록, C 요청 2가지 답 포함 |
 | 4 | RB용 merge API | 3 | 취소. `rtx_shift_token`(PR #17)이 대체, `tcp_collapse_retrans`는 기존 unlink 유지 |
-| 5 | 사용자 공간 하이브리드 모델 + `rtx_validate()` + 랜덤 trace | — | 정렬 배열 기준 모델과 결과 일치, 실패 seed 저장. B 요청 split 5개 케이스 포함 |
+| 5 | 사용자 공간 하이브리드 모델 + `rtx_validate()` + 랜덤 trace | — | **완료 (3.9절, PR 대기)**. 정렬 배열 기준 모델과 결과 일치, 실패 trace 저장(`--fail-dir`), B 문서 6.1 split 사례 포함. 구조 검사는 기존 `rtx_validate_structure()` + 하네스 자체 검사로 대신하고 별도 `rtx_validate()`는 만들지 않음 |
 | 6 | Go/No-Go 판단 | 4, 5 | N 분포와 모델 결과로 V4 계속 또는 V3 축소 결정·기록 |
 | 7 | 커널 하이브리드 backend | 6 | `tcp_sock` 필드, 승격, 캐시. 자체 테스트·모델 동등성 통과 |
 | 8 | init / child clone / purge | 7 | `tcp_init_sock`, `tcp_create_openreq_child`, purge, disconnect 재사용 경로 검사 |
