@@ -132,7 +132,7 @@ class Network:
         result["kernel_path"] = "NOT RUN (packet capture is not internal path evidence)"
         return result
 
-    def case(self, loss, reverse, size, mode):
+    def case(self, loss, reverse, size, mode, port=0):
         label = "%s-%s-%s-%d" % (loss, "reverse" if reverse else "forward", mode, size)
         sender, receiver = self.names[::-1] if reverse else self.names
         address = "198.18.0.1" if reverse else "198.18.0.2"
@@ -141,7 +141,7 @@ class Network:
         options = ["--host", address, "--bytes", str(size), "--mode", mode]
         server_log, client_log = self.run / (label + "-server.json"), self.run / (label + "-client.json")
         server = self.spawn(["ip", "netns", "exec", receiver] + common + ["server"] + options +
-                            ["--port", "0", "--ready", str(ready)], server_log)
+                            ["--port", str(port), "--ready", str(ready)], server_log)
         deadline = time.monotonic() + 5
         port = None
         while time.monotonic() < deadline:

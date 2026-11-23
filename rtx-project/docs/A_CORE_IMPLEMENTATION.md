@@ -24,6 +24,7 @@ A는 재전송 큐의 공통 API(`rtx_*`), 자료구조, 불변식 검증, 초�
 | RB split API + 디버그 자체 테스트 | `0b15ec3` (PR #9) | main 머지 |
 | 직접 접근 정리 (`tcp.c` init·purge) | `4fe3558` (PR #10) | main 머지 |
 | 측정 카운터 + N 히스토그램 + `rtx_prefetch` | `fa64aca` (PR #12) | main 머지 |
+| STATS v2 (ACK 시점 N, 1 단위 버킷, 포트 필터) | `a/stats-v2` | PR 대기. [PR 문서](pr/a-stats-v2.md) |
 | merge·trim 계약(③) | `73747d3` (PR #17, B 구현) | `rtx_shift_token`으로 대체. 계약은 2.5절 |
 | RB용 merge API | — | 만들지 않음. PR #17의 `rtx_shift_token`이 같은 역할 (2.5절) |
 | 하이브리드 모델·`rtx_validate()` | — | 미착수 |
@@ -137,8 +138,10 @@ make olddefconfig
 | DEBUG와 분리한 이유 | DEBUG의 WARN 검사와 추가 검색은 성능을 왜곡한다. STATS는 CPU별 카운터 증가만 한다 |
 | 소켓 크기 영향 | 켰을 때만 `tcp_sock`에 4바이트(`rtx_count`, 큐 안의 skb 수) |
 | 저장소 | CPU별 `struct rtx_stats` (이벤트 카운터 + N 히스토그램). 소켓 lock 안에서 `this_cpu_*`로 증가 |
-| 읽기·초기화 | `cat /proc/rtx_stats` / `echo 0 > /proc/rtx_stats` (root, 트래픽 없을 때). netns와 무관하게 보이도록 `/proc/net`이 아닌 `/proc`에 둔다 |
-| N 히스토그램 | skb를 큐에 연결할 때마다 그 직후의 N을 기록. 구간 `[2^b, 2^(b+1)-1]`, 마지막은 `32768-`. 삽입 빈도로 가중된 분포다 |
+| 읽기·초기화 | `cat /proc/rtx_stats` / `echo 0 > /proc/rtx_stats` (root, 트래픽 없을 때). `0` 이외의 입력은 `-EINVAL`. netns와 무관하게 보이도록 `/proc/net`이 아닌 `/proc`에 둔다 |
+| 포트 필터 (v2) | `echo "port 5001" > /proc/rtx_stats`면 로컬 또는 원격 포트가 5001인 소켓만 센다. `port 0`이면 해제(기본값). 첫 줄 `filter_port`로 확인. 소켓별 `rtx_count`는 필터와 무관하게 항상 유지 |
+| N 히스토그램 (v2) | `n_link`: skb 연결 직후 N(삽입 가중, v1 `n_hist`와 같은 시점). `n_ack`: `tcp_clean_rtx_queue()` 진입 시 제거 전 N(ACK 가중). 둘 다 시간 가중 점유율이 아니다. 버킷은 N 0~64 1 단위, 그 위 `65-127` … `16384-` (74개). 출력은 `n_ack 16 123`, `n_ack 65-127 4`처럼 세 필드 |
+| 카운터 API (v2) | `rtx_stat_inc(sk, id)`, `rtx_stat_add(sk, id, val)`, `rtx_stat_n(sk, h)`. 필터 판정 때문에 `sk`를 받는다 |
 | 자체 테스트와의 관계 | DEBUG도 켜면 부팅 자체 테스트의 삽입이 카운터에 들어간다. 측정 전에 초기화한다 |
 
 | 카운터 | 세는 위치 | 의미 |
@@ -153,7 +156,7 @@ make olddefconfig
 | `shift_partial` / `shift_merge` / `shift_fallback` | `tcp_shift_skb_data` (C) | shift 결과별 횟수 |
 | `ack_clean`, `ack_unlink`, `ack_trim` | `tcp_clean_rtx_queue` (C) | ACK 처리 횟수, 제거 skb 수(ACK당 평균 = 나눗셈), 부분 ACK trim 수 |
 
-호출부 카운터의 enum 항목은 미리 정의해 두었다. C는 `rtx_stat_inc(RTX_STAT_...)` 한 줄만 넣으면 된다. 새 항목이 필요하면 A에게 요청한다(enum과 `/proc` 이름표를 함께 바꿔야 한다).
+호출부 카운터의 enum 항목은 미리 정의해 두었다. C는 `rtx_stat_inc(sk, RTX_STAT_...)` 한 줄만 넣으면 된다(v2부터 `sk` 인자). 새 항목이 필요하면 A에게 요청한다(enum과 `/proc` 이름표를 함께 바꿔야 한다).
 
 ### 2.5 shift·trim·collapse 계약 (PR #17 기준)
 
@@ -238,6 +241,16 @@ C가 3.7절에서 요청한 두 가지에 대한 답:
 - `rtx_prefetch(sk)`를 추가하고 `tcp_ack()`의 `prefetch(sk->tcp_rtx_queue.rb_node)`를 교체했다(C 승인). 이로써 재전송 큐 루트를 어댑터 밖에서 직접 쓰는 곳이 없다.
 - 자체 테스트에 STATS가 켜졌을 때 `rtx_count`와 실제 순회 개수가 같은지 확인하는 검사를 추가했다.
 
+### 3.8 STATS v2 — N 계측 정의 보강 (`a/stats-v2`, 2026-11-16)
+
+B·D가 N 측정 전에 지적한 세 가지를 반영했다. 상세는 [PR 문서](pr/a-stats-v2.md), 측정 절차와 계산식은 [A_N_HISTOGRAM.md](A_N_HISTOGRAM.md).
+
+- **ACK 시점 N**: `n_ack` 추가(`tcp_clean_rtx_queue()` 진입 시, C 파일 1줄). 기존 `n_hist`는 `n_link`로 이름을 바꿔 "삽입 직후 N"임을 명시했다.
+- **K 경계 정확도**: v1은 2의 거듭제곱 버킷(16-31)이라 K=16에서 N ≤ K 비율을 계산할 수 없었다. N 0~64를 1 단위로 바꿨다.
+- **배경 트래픽**: `/proc/rtx_stats`에 포트 필터를 추가했다. 필터 판정에 소켓이 필요해 `rtx_stat_inc/add`가 `sk`를 받도록 바꾸고 C·A 호출부 10곳(`tcp_input.c` 9, `tcp.c` 1)을 기계적으로 갱신했다(동작 변화 없음, STATS off 기계어 동일).
+- L 승격 전 제거 비율은 기존 카운터로 계산한다(`unlink_list / (unlink_list + promote)`, A_N_HISTOGRAM 3절).
+- D의 N 수집기(`run_arm64_n_distribution.py`, PR #29)가 v1 형식만 받아서, v1·v2를 모두 읽고 v2에서는 포트 5001 필터를 쓰도록 고쳤다(2026-11-23). 시도마다 `n_link` = 삽입, `n_ack` = `ack_clean`을 검사한다.
+
 ### 3.7 C와의 결정 사항 (2026-11-11)
 
 | 주제 | 결정 |
@@ -283,6 +296,9 @@ C가 3.7절에서 요청한 두 가지에 대한 답:
 | 3.5 `tcp.c` | `net/ipv4/tcp.o` 비교 (main `d377a82` 대비) | gcc 13.3, `rtx_defconfig` | 동일 |
 | 3.6 카운터 | STATS·DEBUG off, tcp*.o 7개 + `net/ipv6/tcp_ipv6.o` 비교 (main `4fe3558` 대비) | gcc 13.3, `rtx_defconfig` | 8개 동일 (prefetch 교체 포함) |
 | 3.6 카운터 | DEBUG+STATS, STATS만 각각 `net/ipv4`·`net/ipv6` 전체 빌드 | 같음 | 경고·오류 0 |
+| 3.8 STATS v2 | STATS·DEBUG off, tcp*.o 7개 + `tcp_ipv6.o` 비교 (main `ff2325b` 대비), RB·하이브리드 K=16 각각 | gcc 13.3, `x86_64_defconfig` | 각 8개 동일 → [`1116_objdiff_stats_v2_ref.txt`](../evidence/A/1116_objdiff_stats_v2_ref.txt) |
+| 3.8 STATS v2 | STATS만(RB), DEBUG+STATS(하이브리드) tcp 오브젝트 빌드 | 같음 | 경고·오류 0. checkpatch 0/0 |
+| 3.8 STATS v2 | QEMU 부팅: 자체 테스트, 다른 포트 차단, `n_link`·`n_ack` 합계, 잘못된 입력 거부 (RB, 하이브리드 K=16) | gcc 13.3, QEMU TCG, tinyconfig, 루프백 | 둘 다 PASS → [A_N_HISTOGRAM 4.1절](A_N_HISTOGRAM.md#41-정확성-확인-qemu-성능-수치-아님) |
 | 3.6 카운터 | DEBUG+STATS 커널 QEMU 부팅 + 루프백 100MB 전송 후 `/proc/rtx_stats` | gcc 13.3, QEMU 1 vCPU, busybox initramfs | 자체 테스트 512 통과·0 실패. 200MB 송수신 일치. `insert_append` 6368 + `insert_ordered` 1(SYN) = `unlink_tree` 6369, `n_hist` 합계 6369. WARNING 0 |
 
 한계:
@@ -313,7 +329,7 @@ C가 3.7절에서 요청한 두 가지에 대한 답:
 | 순서 | 작업 | 의존성 | 완료 기준 |
 | --- | --- | --- | --- |
 | 1 | `a/rtx-stats` 머지 | C 리뷰 | 완료 (PR #12, `fa64aca`) |
-| 2 | N 분포 측정 | 1, D 시나리오·측정 기기 | 무손실·손실, RTT 조건별 `n_hist` 기록 |
+| 2 | N 분포 측정 | STATS v2(3.8) 머지, D 측정 기기 | 6개 조건별 `n_ack`·`n_link` 기록 → [A_N_HISTOGRAM.md](A_N_HISTOGRAM.md) 4.2절 |
 | 3 | merge·trim 계약(③) 초안 | — | 완료. PR #17 구현 기준으로 2.5절에 기록, C 요청 2가지 답 포함 |
 | 4 | RB용 merge API | 3 | 취소. `rtx_shift_token`(PR #17)이 대체, `tcp_collapse_retrans`는 기존 unlink 유지 |
 | 5 | 사용자 공간 하이브리드 모델 + `rtx_validate()` + 랜덤 trace | — | 정렬 배열 기준 모델과 결과 일치, 실패 seed 저장. B 요청 split 5개 케이스 포함 |
