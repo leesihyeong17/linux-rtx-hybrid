@@ -108,10 +108,10 @@ static void bm_account_link(struct sock *sk, struct sk_buff *skb)
 
 static int bm_valid(struct sock *sk)
 {
-	struct sk_buff *skb, *prev = NULL, *nodes[BM_MAX_N];
+	struct sk_buff *skb, *prev = NULL;
 	struct tcp_sock *tp = tcp_sk(sk);
-	unsigned int packets = 0, memory = 0, n = 0, times = 0;
-	struct list_head *link;
+	unsigned int packets = 0, memory = 0, n = 0;
+	struct list_head *link = tp->tsorted_sent_queue.next;
 
 	for (skb = rtx_first(sk); skb; skb = rtx_next(sk, skb)) {
 		if (n == BM_MAX_N || rtx_prev(sk, skb) != prev ||
@@ -120,7 +120,11 @@ static int bm_valid(struct sock *sk)
 		if (!before(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq) ||
 		    TCP_SKB_CB(skb)->sacked)
 			return -1;
-		nodes[n++] = skb;
+		if (link != &skb->tcp_tsorted_anchor ||
+		    link->next->prev != link || link->prev->next != link)
+			return -1;
+		link = link->next;
+		n++;
 		packets += tcp_skb_pcount(skb);
 		memory += skb->truesize;
 		prev = skb;
@@ -130,14 +134,7 @@ static int bm_valid(struct sock *sk)
 	    tp->retrans_out || tp->highest_sack || tp->lost_skb_hint ||
 	    tp->retransmit_skb_hint)
 		return -1;
-	for (link = tp->tsorted_sent_queue.next;
-	     link != &tp->tsorted_sent_queue; link = link->next) {
-		if (times == n || link->next->prev != link ||
-		    link->prev->next != link ||
-		    link != &nodes[times++]->tcp_tsorted_anchor)
-			return -1;
-	}
-	if (times != n)
+	if (link != &tp->tsorted_sent_queue)
 		return -1;
 #ifdef CONFIG_TCP_RTX_CACHE
 	if (tp->rtx_tree_first != skb_rb_first(&sk->tcp_rtx_queue) ||

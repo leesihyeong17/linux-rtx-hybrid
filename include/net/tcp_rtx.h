@@ -320,7 +320,13 @@ static inline void __rtx_tree_insert(struct sock *sk, struct sk_buff *skb)
 #endif
 }
 
-/* Only for a sequence greater than the current TREE maximum. */
+/*
+ * The skb must follow the current tree maximum in TCP sequence order.
+ * In the RB backend, tcp_event_new_data_sent() uses rtx_append() for
+ * newly sent data following the skbs already on the retransmit queue.
+ * In the hybrid backend, __rtx_limit() promotes the oldest skb of the
+ * recent list, whose entire sequence range follows the tree.
+ */
 static inline void __rtx_tree_append(struct sock *sk, struct sk_buff *skb)
 {
 #ifdef CONFIG_TCP_RTX_TAIL

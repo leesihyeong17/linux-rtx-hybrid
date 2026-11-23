@@ -729,7 +729,7 @@ config TCP_RTX_CACHE
 
 config TCP_RTX_TAIL
 	bool "TCP: direct retransmit tree tail insertion"
-	depends on TCP_RTX_CACHE
+	select TCP_RTX_CACHE
 	default n
 	help
 	  Skip tree position searches for ordered appends and promotion
