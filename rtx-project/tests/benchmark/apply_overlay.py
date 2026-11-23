@@ -39,8 +39,8 @@ def apply(root, harness, evidence, mode):
         for old, new in (
             ('rb_link_node(&skb->rbnode, parent, link);',
              'rtx_bench_tail_event(sk);\n\trb_link_node(&skb->rbnode, parent, link);'),
-            ('rtx_stat_inc(RTX_STAT_PROMOTE);',
-             'rtx_bench_promote_event(sk);\n\trtx_stat_inc(RTX_STAT_PROMOTE);'),
+            ('rtx_stat_inc(sk, RTX_STAT_PROMOTE);',
+             'rtx_bench_promote_event(sk);\n\trtx_stat_inc(sk, RTX_STAT_PROMOTE);'),
         ):
             if modified_header.count(old) != 1:
                 raise ValueError('Unexpected Core anchor: ' + old)

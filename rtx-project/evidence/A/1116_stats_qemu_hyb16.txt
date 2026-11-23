@@ -1,0 +1,367 @@
+# a_stats_qemu.sh 2026-11-16
+# machine: x86_64 QEMU TCG (Claude cloud), compiler: gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+# commit: 99959cc
+# config: tinyconfig + TCP_RTX_DEBUG=y TCP_RTX_STATS=y TCP_RTX_HYBRID=y RECENT_MAX=16
+
+PASS boot self test: rtx_selftest: 761 passed, 0 failed
+PASS filter 5001, traffic 5002: all counters and histograms 0
+PASS filter_port shows 5001
+PASS sum(n_link) 934 == inserts 934
+PASS sum(n_ack) 189 == ack_clean 189
+PASS bucket count 74 each
+INFO unlink_list 755 promote 178 -> removed from L before promotion 0.809
+INFO n_ack N<=16 share 0.931 (loopback, not a real distribution)
+PASS bad write rejected with error
+PASS port 0 clears filter
+PASS transfers complete (20MB on 5002, 50MB on 5001)
+PASS no WARNING/BUG/Oops
+RESULT PASS
+
+## raw (A_STATS / rtx_selftest lines)
+A_STATS uname 5.4.214+
+rtx_selftest: find_cover sweep base lookups=4558 mismatches=0 control_diff=76 avg_steps=7.72 max_steps=16
+rtx_selftest: find_cover sweep wrap-inside lookups=4558 mismatches=0 control_diff=76 avg_steps=7.72 max_steps=16
+rtx_selftest: find_cover sweep wrap-first lookups=4558 mismatches=0 control_diff=76 avg_steps=7.72 max_steps=16
+rtx_selftest: hybrid K=16 promotion/replace/shift/child executed
+rtx_selftest: 761 passed, 0 failed
+A_STATS recv_bytes 20971520
+A_STATS other filter_port 5001
+A_STATS other insert_append 0
+A_STATS other insert_ordered 0
+A_STATS other insert_split 0
+A_STATS other unlink_tree 0
+A_STATS other unlink_list 0
+A_STATS other unlink_purge 0
+A_STATS other promote 0
+A_STATS other find_cover 0
+A_STATS other find_cover_tree_steps 0
+A_STATS other find_cover_list_steps 0
+A_STATS other sack_skip_reuse 0
+A_STATS other sack_block 0
+A_STATS other sack_walk_skb 0
+A_STATS other shift_partial 0
+A_STATS other shift_merge 0
+A_STATS other shift_fallback 0
+A_STATS other ack_clean 0
+A_STATS other ack_unlink 0
+A_STATS other ack_trim 0
+A_STATS other n_link 0 0
+A_STATS other n_link 1 0
+A_STATS other n_link 2 0
+A_STATS other n_link 3 0
+A_STATS other n_link 4 0
+A_STATS other n_link 5 0
+A_STATS other n_link 6 0
+A_STATS other n_link 7 0
+A_STATS other n_link 8 0
+A_STATS other n_link 9 0
+A_STATS other n_link 10 0
+A_STATS other n_link 11 0
+A_STATS other n_link 12 0
+A_STATS other n_link 13 0
+A_STATS other n_link 14 0
+A_STATS other n_link 15 0
+A_STATS other n_link 16 0
+A_STATS other n_link 17 0
+A_STATS other n_link 18 0
+A_STATS other n_link 19 0
+A_STATS other n_link 20 0
+A_STATS other n_link 21 0
+A_STATS other n_link 22 0
+A_STATS other n_link 23 0
+A_STATS other n_link 24 0
+A_STATS other n_link 25 0
+A_STATS other n_link 26 0
+A_STATS other n_link 27 0
+A_STATS other n_link 28 0
+A_STATS other n_link 29 0
+A_STATS other n_link 30 0
+A_STATS other n_link 31 0
+A_STATS other n_link 32 0
+A_STATS other n_link 33 0
+A_STATS other n_link 34 0
+A_STATS other n_link 35 0
+A_STATS other n_link 36 0
+A_STATS other n_link 37 0
+A_STATS other n_link 38 0
+A_STATS other n_link 39 0
+A_STATS other n_link 40 0
+A_STATS other n_link 41 0
+A_STATS other n_link 42 0
+A_STATS other n_link 43 0
+A_STATS other n_link 44 0
+A_STATS other n_link 45 0
+A_STATS other n_link 46 0
+A_STATS other n_link 47 0
+A_STATS other n_link 48 0
+A_STATS other n_link 49 0
+A_STATS other n_link 50 0
+A_STATS other n_link 51 0
+A_STATS other n_link 52 0
+A_STATS other n_link 53 0
+A_STATS other n_link 54 0
+A_STATS other n_link 55 0
+A_STATS other n_link 56 0
+A_STATS other n_link 57 0
+A_STATS other n_link 58 0
+A_STATS other n_link 59 0
+A_STATS other n_link 60 0
+A_STATS other n_link 61 0
+A_STATS other n_link 62 0
+A_STATS other n_link 63 0
+A_STATS other n_link 64 0
+A_STATS other n_link 65-127 0
+A_STATS other n_link 128-255 0
+A_STATS other n_link 256-511 0
+A_STATS other n_link 512-1023 0
+A_STATS other n_link 1024-2047 0
+A_STATS other n_link 2048-4095 0
+A_STATS other n_link 4096-8191 0
+A_STATS other n_link 8192-16383 0
+A_STATS other n_link 16384- 0
+A_STATS other n_ack 0 0
+A_STATS other n_ack 1 0
+A_STATS other n_ack 2 0
+A_STATS other n_ack 3 0
+A_STATS other n_ack 4 0
+A_STATS other n_ack 5 0
+A_STATS other n_ack 6 0
+A_STATS other n_ack 7 0
+A_STATS other n_ack 8 0
+A_STATS other n_ack 9 0
+A_STATS other n_ack 10 0
+A_STATS other n_ack 11 0
+A_STATS other n_ack 12 0
+A_STATS other n_ack 13 0
+A_STATS other n_ack 14 0
+A_STATS other n_ack 15 0
+A_STATS other n_ack 16 0
+A_STATS other n_ack 17 0
+A_STATS other n_ack 18 0
+A_STATS other n_ack 19 0
+A_STATS other n_ack 20 0
+A_STATS other n_ack 21 0
+A_STATS other n_ack 22 0
+A_STATS other n_ack 23 0
+A_STATS other n_ack 24 0
+A_STATS other n_ack 25 0
+A_STATS other n_ack 26 0
+A_STATS other n_ack 27 0
+A_STATS other n_ack 28 0
+A_STATS other n_ack 29 0
+A_STATS other n_ack 30 0
+A_STATS other n_ack 31 0
+A_STATS other n_ack 32 0
+A_STATS other n_ack 33 0
+A_STATS other n_ack 34 0
+A_STATS other n_ack 35 0
+A_STATS other n_ack 36 0
+A_STATS other n_ack 37 0
+A_STATS other n_ack 38 0
+A_STATS other n_ack 39 0
+A_STATS other n_ack 40 0
+A_STATS other n_ack 41 0
+A_STATS other n_ack 42 0
+A_STATS other n_ack 43 0
+A_STATS other n_ack 44 0
+A_STATS other n_ack 45 0
+A_STATS other n_ack 46 0
+A_STATS other n_ack 47 0
+A_STATS other n_ack 48 0
+A_STATS other n_ack 49 0
+A_STATS other n_ack 50 0
+A_STATS other n_ack 51 0
+A_STATS other n_ack 52 0
+A_STATS other n_ack 53 0
+A_STATS other n_ack 54 0
+A_STATS other n_ack 55 0
+A_STATS other n_ack 56 0
+A_STATS other n_ack 57 0
+A_STATS other n_ack 58 0
+A_STATS other n_ack 59 0
+A_STATS other n_ack 60 0
+A_STATS other n_ack 61 0
+A_STATS other n_ack 62 0
+A_STATS other n_ack 63 0
+A_STATS other n_ack 64 0
+A_STATS other n_ack 65-127 0
+A_STATS other n_ack 128-255 0
+A_STATS other n_ack 256-511 0
+A_STATS other n_ack 512-1023 0
+A_STATS other n_ack 1024-2047 0
+A_STATS other n_ack 2048-4095 0
+A_STATS other n_ack 4096-8191 0
+A_STATS other n_ack 8192-16383 0
+A_STATS other n_ack 16384- 0
+A_STATS recv_bytes 52428800
+A_STATS match filter_port 5001
+A_STATS match insert_append 933
+A_STATS match insert_ordered 1
+A_STATS match insert_split 0
+A_STATS match unlink_tree 179
+A_STATS match unlink_list 755
+A_STATS match unlink_purge 0
+A_STATS match promote 178
+A_STATS match find_cover 0
+A_STATS match find_cover_tree_steps 0
+A_STATS match find_cover_list_steps 0
+A_STATS match sack_skip_reuse 0
+A_STATS match sack_block 0
+A_STATS match sack_walk_skb 0
+A_STATS match shift_partial 0
+A_STATS match shift_merge 0
+A_STATS match shift_fallback 0
+A_STATS match ack_clean 189
+A_STATS match ack_unlink 934
+A_STATS match ack_trim 0
+A_STATS match n_link 0 0
+A_STATS match n_link 1 175
+A_STATS match n_link 2 166
+A_STATS match n_link 3 46
+A_STATS match n_link 4 44
+A_STATS match n_link 5 39
+A_STATS match n_link 6 35
+A_STATS match n_link 7 35
+A_STATS match n_link 8 32
+A_STATS match n_link 9 26
+A_STATS match n_link 10 26
+A_STATS match n_link 11 25
+A_STATS match n_link 12 24
+A_STATS match n_link 13 24
+A_STATS match n_link 14 23
+A_STATS match n_link 15 23
+A_STATS match n_link 16 13
+A_STATS match n_link 17 13
+A_STATS match n_link 18 13
+A_STATS match n_link 19 13
+A_STATS match n_link 20 13
+A_STATS match n_link 21 12
+A_STATS match n_link 22 12
+A_STATS match n_link 23 12
+A_STATS match n_link 24 12
+A_STATS match n_link 25 12
+A_STATS match n_link 26 12
+A_STATS match n_link 27 12
+A_STATS match n_link 28 12
+A_STATS match n_link 29 12
+A_STATS match n_link 30 12
+A_STATS match n_link 31 6
+A_STATS match n_link 32 0
+A_STATS match n_link 33 0
+A_STATS match n_link 34 0
+A_STATS match n_link 35 0
+A_STATS match n_link 36 0
+A_STATS match n_link 37 0
+A_STATS match n_link 38 0
+A_STATS match n_link 39 0
+A_STATS match n_link 40 0
+A_STATS match n_link 41 0
+A_STATS match n_link 42 0
+A_STATS match n_link 43 0
+A_STATS match n_link 44 0
+A_STATS match n_link 45 0
+A_STATS match n_link 46 0
+A_STATS match n_link 47 0
+A_STATS match n_link 48 0
+A_STATS match n_link 49 0
+A_STATS match n_link 50 0
+A_STATS match n_link 51 0
+A_STATS match n_link 52 0
+A_STATS match n_link 53 0
+A_STATS match n_link 54 0
+A_STATS match n_link 55 0
+A_STATS match n_link 56 0
+A_STATS match n_link 57 0
+A_STATS match n_link 58 0
+A_STATS match n_link 59 0
+A_STATS match n_link 60 0
+A_STATS match n_link 61 0
+A_STATS match n_link 62 0
+A_STATS match n_link 63 0
+A_STATS match n_link 64 0
+A_STATS match n_link 65-127 0
+A_STATS match n_link 128-255 0
+A_STATS match n_link 256-511 0
+A_STATS match n_link 512-1023 0
+A_STATS match n_link 1024-2047 0
+A_STATS match n_link 2048-4095 0
+A_STATS match n_link 4096-8191 0
+A_STATS match n_link 8192-16383 0
+A_STATS match n_link 16384- 0
+A_STATS match n_ack 0 0
+A_STATS match n_ack 1 23
+A_STATS match n_ack 2 120
+A_STATS match n_ack 3 2
+A_STATS match n_ack 4 5
+A_STATS match n_ack 5 4
+A_STATS match n_ack 6 0
+A_STATS match n_ack 7 3
+A_STATS match n_ack 8 6
+A_STATS match n_ack 9 0
+A_STATS match n_ack 10 1
+A_STATS match n_ack 11 1
+A_STATS match n_ack 12 0
+A_STATS match n_ack 13 1
+A_STATS match n_ack 14 0
+A_STATS match n_ack 15 10
+A_STATS match n_ack 16 0
+A_STATS match n_ack 17 0
+A_STATS match n_ack 18 0
+A_STATS match n_ack 19 0
+A_STATS match n_ack 20 1
+A_STATS match n_ack 21 0
+A_STATS match n_ack 22 0
+A_STATS match n_ack 23 0
+A_STATS match n_ack 24 0
+A_STATS match n_ack 25 0
+A_STATS match n_ack 26 0
+A_STATS match n_ack 27 0
+A_STATS match n_ack 28 0
+A_STATS match n_ack 29 0
+A_STATS match n_ack 30 6
+A_STATS match n_ack 31 6
+A_STATS match n_ack 32 0
+A_STATS match n_ack 33 0
+A_STATS match n_ack 34 0
+A_STATS match n_ack 35 0
+A_STATS match n_ack 36 0
+A_STATS match n_ack 37 0
+A_STATS match n_ack 38 0
+A_STATS match n_ack 39 0
+A_STATS match n_ack 40 0
+A_STATS match n_ack 41 0
+A_STATS match n_ack 42 0
+A_STATS match n_ack 43 0
+A_STATS match n_ack 44 0
+A_STATS match n_ack 45 0
+A_STATS match n_ack 46 0
+A_STATS match n_ack 47 0
+A_STATS match n_ack 48 0
+A_STATS match n_ack 49 0
+A_STATS match n_ack 50 0
+A_STATS match n_ack 51 0
+A_STATS match n_ack 52 0
+A_STATS match n_ack 53 0
+A_STATS match n_ack 54 0
+A_STATS match n_ack 55 0
+A_STATS match n_ack 56 0
+A_STATS match n_ack 57 0
+A_STATS match n_ack 58 0
+A_STATS match n_ack 59 0
+A_STATS match n_ack 60 0
+A_STATS match n_ack 61 0
+A_STATS match n_ack 62 0
+A_STATS match n_ack 63 0
+A_STATS match n_ack 64 0
+A_STATS match n_ack 65-127 0
+A_STATS match n_ack 128-255 0
+A_STATS match n_ack 256-511 0
+A_STATS match n_ack 512-1023 0
+A_STATS match n_ack 1024-2047 0
+A_STATS match n_ack 2048-4095 0
+A_STATS match n_ack 4096-8191 0
+A_STATS match n_ack 8192-16383 0
+A_STATS match n_ack 16384- 0
+A_STATS badinput rejected
+A_STATS final_filter filter_port 0
+A_STATS done

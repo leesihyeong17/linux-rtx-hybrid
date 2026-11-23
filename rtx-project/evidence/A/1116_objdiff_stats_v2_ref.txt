@@ -1,0 +1,33 @@
+# STATS v2 objdiff 2026-11-16
+# machine: x86_64 (Claude cloud), compiler: gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+# base: origin/main ff2325b, target: a/stats-v2 kernel commit (patch-id 337d475)
+# config: x86_64_defconfig, TCP_RTX_STATS=n, TCP_RTX_DEBUG=n
+# method: objdump -d --no-show-raw-insn, addresses/offsets normalized, sha1 of result (first 12)
+# note: _ref - made with a temporary script in the Claude session (same method as a_objdiff.sh, which is not on main yet). Regenerate with a_objdiff.sh after patch 0006 lands.
+
+## RB backend
+net/ipv4/tcp.o               SAME c6cc9b51f40c c6cc9b51f40c
+net/ipv4/tcp_input.o         SAME 1ac440187c83 1ac440187c83
+net/ipv4/tcp_output.o        SAME f026f07c161e f026f07c161e
+net/ipv4/tcp_ipv4.o          SAME ac23610f5dc1 ac23610f5dc1
+net/ipv4/tcp_timer.o         SAME 26232821f761 26232821f761
+net/ipv4/tcp_minisocks.o     SAME 601f84b0809a 601f84b0809a
+net/ipv6/tcp_ipv6.o          SAME fd635969c150 fd635969c150
+net/ipv4/tcp_recovery.o      SAME f3c15ecb3397 f3c15ecb3397
+result: 8/8 SAME
+
+## HYBRID, TCP_RTX_RECENT_MAX=16
+net/ipv4/tcp.o               SAME a5da88b3c3bd a5da88b3c3bd
+net/ipv4/tcp_input.o         SAME 09921e05964d 09921e05964d
+net/ipv4/tcp_output.o        SAME 595ec9b35cc4 595ec9b35cc4
+net/ipv4/tcp_ipv4.o          SAME 7a121b976198 7a121b976198
+net/ipv4/tcp_timer.o         SAME 8ac021f3c31c 8ac021f3c31c
+net/ipv4/tcp_minisocks.o     SAME 0dd6039145bf 0dd6039145bf
+net/ipv6/tcp_ipv6.o          SAME 43a6ba8da5a3 43a6ba8da5a3
+net/ipv4/tcp_recovery.o      SAME 624fff10562a 624fff10562a
+result: 8/8 SAME
+
+## STATS=y build warnings (kernel-doc W= notes excluded)
+RB + STATS: 0 warnings, 0 errors
+HYBRID K=16 + DEBUG + STATS: 0 warnings, 0 errors
+checkpatch --no-tree (kernel diff): 0 errors, 0 warnings

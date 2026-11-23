@@ -773,9 +773,11 @@ config TCP_RTX_STATS
 	default n
 	---help---
 	  Counts retransmit queue events (inserts, removals, lookups, SACK
-	  and ACK work) per CPU and keeps a histogram of the queue length
-	  in skbs. Results are in /proc/rtx_stats. Adds 4 bytes to
-	  struct tcp_sock and a few instructions per queue operation.
+	  and ACK work) per CPU and keeps two histograms of the queue length
+	  in skbs: after each insert and on entry to ACK processing. Results
+	  are in /proc/rtx_stats, which can be limited to one TCP port.
+	  Adds 4 bytes to struct tcp_sock and a few instructions per queue
+	  operation.
 
 	  For measurement builds only. If unsure, say N.
 
