@@ -1,6 +1,6 @@
 # A: 사용자 공간 하이브리드 모델 + 랜덤 trace 동등성 테스트 (설계 11.1)
 
-작성: 2026-11-23 · 담당: A · 브랜치: `a/hybrid-model` · PR: (생성 후 링크) → PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/35 · 관련: 이슈 #34, 설계 11.1, A 문서 3.9절·7절 5번, B 문서 6.1절, 이슈 #24, PR #25·#33
+작성: 2026-11-23 · 담당: A · 브랜치: `a/hybrid-model` · PR: https://github.com/leesihyeong17/linux-rtx-hybrid/pull/35 · 관련: 이슈 #34, 설계 11.1, A 문서 3.9절·7절 5번, B 문서 6.1절, 이슈 #24, PR #25·#33
 
 ## 1. 문제와 범위
 
