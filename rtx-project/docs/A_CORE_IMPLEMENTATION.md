@@ -194,7 +194,7 @@ C가 3.7절에서 요청한 두 가지에 대한 답:
 1. **skb가 first(L)일 때 부분 shift의 경계 검사**: 검사하지 않으며 필요 없다. 부분 shift 전에는 `prev.end_seq == skb.seq`, 후에는 둘 다 `shifted`만큼 늘어나고 `skb.seq < skb.end_seq ≤ next.seq`가 유지된다. skb는 L의 첫 노드로 남고 `prev`(= last(T))의 seq는 그대로라 `seq < first(L).seq`도 유지된다. 따라서 소속과 `rtx_tree_last` 캐시가 바뀌지 않는다. skb가 T의 마지막이고 next가 first(L)인 경우도 `skb.seq < end_seq ≤ first(L).seq`라 TREE로 남는다. 소속이 틀어지는 경우는 전체 shift로 `skb.seq == end_seq == first(L).seq`가 될 때뿐이며, 이것이 token에 소속을 미리 저장하는 이유다.
 2. **prepare~commit 사이 공개 API 허용 여부**: 모두 금지다. 두 단계 merge API 대신 필요한 `next`를 prepare가 token에 담아 넘긴다.
 
-검증 범위: 위 내용은 코드를 읽어 확인한 것이다(실행 아님). B의 Core selftest는 경계에 도달한 전체 shift token과 partial trim을 실행했다(issue-14 문서). **first(L)에서의 부분 shift와 사이 구간 API 호출 시 WARN 발생은 A가 실행해 확인하지 않았다(미실행).** 실제 SACK 패킷 경로의 폭넓은 조합은 #15(B·C)의 범위다.
+검증 범위: 위 내용은 코드를 읽어 확인한 것이다(실행 아님). B의 Core selftest는 경계에 도달한 전체 shift token과 partial trim을 실행했다(issue-14 문서). 이후 C의 [#23](pr/issue-15-c-sack-ack-regression.md)(`case_cshift.c`)이 실제 `tcp_ack()` 경로로 **first(L)→last(T) 부분 shift, first(L) 전체 병합, TREE 끝과 first(L)의 동시 병합**을 실행했고, 결과(소속, `rtx_tree_last`, `rtx_recent_len`, `highest_sack == tok.next`)가 이 절의 계약과 일치했다. A는 머지 전 main `1806040`에 #23을 merge한 상태로 RB·HYBRID K=16·K=1·V4(TAIL)를 QEMU에서 재실행했다(BVERIFY 실패 0, RB 대비 TCP 상태 차이 0). **사이 구간에서 공개 API를 부를 때 DEBUG WARN이 실제로 나는지는 여전히 미실행이다.** 다만 B·C·D의 모든 실행에서 WARNING 0이므로 현재 호출부에 위반 경로는 관찰되지 않았다.
 
 ## 3. 작업 기록
 

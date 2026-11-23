@@ -37,7 +37,8 @@ API·도메인 영향: 없음 (문서만 변경). 문서에 적은 계약은 PR 
 | `rtx_shift_*` 호출부 | `grep -rn "rtx_shift_" net/ include/` | 커널은 `tcp_shifted_skb` 1곳, 나머지는 selftest |
 | 공백 오류 | `git diff --check` | 오류 없음 |
 | 커널 빌드·부팅·selftest | — | 해당 없음. 문서만 변경했으므로 재빌드하지 않음 (`AGENTS.md` 4절) |
-| first(L)에서 부분 shift, 사이 구간 API 호출 시 WARN | — | **미실행** |
+| first(L)에서 부분 shift | (머지 후) C의 #23 `c_shift_boundary`, A가 main `1806040` + #23 merge로 QEMU 재실행 | 계약과 일치, BVERIFY 실패 0 (11/23 갱신) |
+| 사이 구간 API 호출 시 WARN | — | **미실행** |
 
 ## 5. 증거
 
@@ -49,7 +50,7 @@ API·도메인 영향: 없음 (문서만 변경). 문서에 적은 계약은 PR 
 
 ## 7. 남은 작업
 
-- C: `tcp_input.c`의 shift 변경(PR #17)과 2.5절 계약 사후 확인.
-- A: first(L) 부분 shift와 사이 구간 API 호출 WARN을 selftest 또는 하이브리드 모델로 실행 검증 (모델 작업에서).
+- ~~C: `tcp_input.c`의 shift 변경(PR #17)과 2.5절 계약 사후 확인.~~ → #23으로 완료 (11/23)
+- A: ~~first(L) 부분 shift~~(#23으로 실행됨)와 사이 구간 API 호출 WARN을 selftest 또는 하이브리드 모델로 실행 검증.
 - A: 7절 7·8번(하이브리드 backend, init/child/purge)도 PR #17로 상당 부분 완료됐다. A의 사후 리뷰와 독립 검증 결과와 함께 갱신한다.
 - 별도 PR: 증거 도구·기존 작업 증거(패치 0006) 재정리.
