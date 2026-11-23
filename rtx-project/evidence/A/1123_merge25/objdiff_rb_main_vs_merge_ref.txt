@@ -1,0 +1,20 @@
+# A objdiff — TCP 오브젝트 기계어 비교
+date:        2026-11-23 13:49 KST
+device:      Claude 클라우드 x86_64 (x86_64)
+compiler:    gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+base:        0f2987d00 Merge pull request #33 from leesihyeong17/a/stats-v2
+target:      78ddfe845 chore: main 반영 merge — #21·#33과의 충돌 해결
+defconfig:   rtx_defconfig
+options:     CONFIG_TCP_RTX_DEBUG=0 CONFIG_TCP_RTX_STATS=0
+method:      objdump -d, 주소 제거 후 함수 단위 비교
+
+SAME  net/ipv4/tcp.o               313716d075d7
+SAME  net/ipv4/tcp_input.o         4f3b8dcb73e7
+SAME  net/ipv4/tcp_output.o        151d806c7360
+SAME  net/ipv4/tcp_ipv4.o          db7ad6cdfe22
+SAME  net/ipv4/tcp_timer.o         076f2199991b
+SAME  net/ipv4/tcp_recovery.o      97ad6b64b204
+SAME  net/ipv4/tcp_minisocks.o     53de8050c36b
+SAME  net/ipv6/tcp_ipv6.o          f676ea217f14
+
+result: 8 / 8 SAME

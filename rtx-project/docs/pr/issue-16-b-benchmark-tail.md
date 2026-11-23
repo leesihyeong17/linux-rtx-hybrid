@@ -6,6 +6,7 @@
 - 브랜치: `feat/b-rtx-benchmark-tail`
 - 기준: `0ee4a1a716d5f5f5f4ea89e5eae948c5dd30fa49`, 선행 [PR #20](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/20)
 - 대상: 선행 PR이 열려 있는 동안 `test/b-sack-boundary-regression`에 쌓는 후속 PR. 선행 PR 병합 후 main 기준으로 재검토한다.
+- 2026-11-23: #20 병합 후 base를 `main`으로 변경하고 main `0f2987d`를 merge했다 (아래 "main 통합 merge" 절).
 
 ## 문제와 완료 범위
 
@@ -98,6 +99,29 @@ python3 -B -m unittest discover -s rtx-project/tests/runtime -p 'test_*.py' -v
 첫 correctness 실행은 로컬 Ubuntu 이미지 조회에서 `No such image`로 종료했다. 재조회로 기존 이미지를 확인하고 같은 이미지를 재사용해 성공했다. 이미지 pull이나 기존 이미지 삭제는 하지 않았다. checkpatch 초기에 지적된 Kconfig 도움말 길이와 C 줄 길이는 수정 후 다시 확인했다.
 
 실제 커널 fixture/benchmark 실패는 없었다. 수집기 음성 대조는 손상된 입력을 의도대로 거부했다. 기존 커널의 OpenSSL deprecated 경고와 compressed kernel relocation/DT_TEXTREL 링크 경고는 남는다. 새 C 컴파일 경고를 숨기는 옵션은 추가하지 않았다. HTML 캡처 서버의 favicon 404는 보고서 로드·캡처에 영향이 없었다.
+
+## main 통합 merge (2026-11-23, A)
+
+- 배경: #20 병합 뒤 base 브랜치 삭제로 #25가 자동으로 닫혀 다시 열고 base를 `main`으로 바꿨다. 그 사이 main에 #21(C 카운터·find_cover sweep)과 #33(A STATS v2, `rtx_stat_inc(sk, id)`)이 들어와 충돌이 생겼다.
+- 방식: rebase 대신 main `0f2987d`를 이 브랜치에 merge(`78ddfe8`). 기존 커밋 `00d5aafd6`·`852d1486a`·`4e204ffda`와 위 기준 SHA는 그대로이며 force-push가 없다.
+- 충돌 해결
+  - `include/net/tcp_rtx.h` 승격: `__rtx_tree_append(sk, skb); rtx_stat_inc(sk, RTX_STAT_PROMOTE);`
+  - `net/ipv4/tcp_rtx_selftest.c`: 이 PR의 cache/tail 검사와 #21 sweep·#33 `rtx_n_bucket` 검사를 모두 유지, init에서 셋 다 호출
+  - `tests/benchmark/apply_overlay.py`: 승격 anchor를 `rtx_stat_inc(sk, RTX_STAT_PROMOTE);`로 갱신 (텍스트 충돌은 없었지만 #33 API 변경으로 anchor가 사라짐)
+
+| 검증 (Claude 클라우드 x86_64, gcc 13.3.0) | 결과 | 증거 (`rtx-project/evidence/A/1123_merge25/`) |
+| --- | --- | --- |
+| 모두 off RB 기본형, main vs merge 기계어 (TCP 오브젝트 8개) | 8/8 SAME | `objdiff_rb_main_vs_merge_ref.txt` |
+| HYBRID K=16·TAIL off·DEBUG/STATS off, #25 head vs merge | 8/8 SAME → merge가 만든 기계어 변화 없음 | `objdiff_hyb16_pr25_vs_merge_ref.txt` |
+| 같은 설정 main vs merge | 1/8 SAME. 차이는 `tcp_sock` 필드 오프셋(0x898~0x8a8)뿐, 오프셋을 가리면 8/8 동일 → 이 PR의 필드 배치 변경 | `objdiff_hyb16_main_vs_merge_ref.txt` |
+| 빌드: V4·V3·V2 DEBUG+STATS on, V4·V3 off (`net/ipv4/` 전체 + `tcp_ipv6.o`) | 5/5 성공, tcp/rtx 경고 0 (호스트 도구 OpenSSL 경고만) | `buildmatrix_ref.txt` |
+| CACHE 없이 TAIL만 켬 | `olddefconfig`가 TAIL을 조용히 제거 (A 리뷰 제안 1 재현, 미반영 상태) | `buildmatrix_ref.txt` |
+| 사용자 공간 모델(#35 도구, `a_model_test.sh 78ddfe8`): 14개 빌드(rb·rb-cache·rb-tail·hyb K=1/2/4/16 ±tail 등) | 시나리오 17개, 랜덤 2,000 seed·명령 532만, 불일치 0, 변이 17/17 검출 | `model_78ddfe8.txt` |
+| QEMU tinyconfig V4(HYBRID K=16+CACHE+TAIL)+DEBUG+STATS | 자체 테스트 1364/0 (cache/tail·sweep·hybrid 검사 모두 실행 로그 확인), STATS v2 포트 필터·`n_link`=삽입·`n_ack`=`ack_clean` PASS, WARNING/BUG 0 | `stats_qemu_v4_ref.txt` |
+| `git diff --check`, checkpatch(merge 결과의 Core·selftest·Kconfig·tcp.h, main 대비) | 문제 없음 | — |
+| `rtx-project` Python 시험 (tests 110, benchmark 9, integration 2), 두 overlay를 merge 소스 사본에 적용 | 모두 통과 | — |
+
+`_ref` 파일은 아직 레포에 없는 도구(A 증거 도구 0006의 `a_objdiff.sh`에 설정 추가 옵션, `a_stats_qemu.sh`에 CACHE/TAIL 추가)로 만들었다. 미실행: ARM64·GCC 9.4, 이 PR의 Docker 회귀·벤치마크 재실행, 실제 TCP 시험. B 확인 필요: 리뷰 제안 2개(TAIL `select`/`.config` 검사, `__rtx_tree_append` 호출자 주석), D가 보고한 `bm_valid` 스택 1,040B.
 
 ## 남은 작업과 인계
 
