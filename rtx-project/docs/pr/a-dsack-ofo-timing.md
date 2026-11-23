@@ -2,7 +2,8 @@
 
 - 대상: D의 [#26 ARM64 회귀 문서](issue-15-d-arm64-c-regression.md) 10절 "DSACK_OFO 직후 lost/retrans는 HYBRID 1/1, RB 0/0, 원인 미확정"
 - 기준 SHA: main `f78f562` (= PR #25 통합 merge `78ddfe8`와 같은 트리)
-- PR: (생성 후 링크)
+- 이슈: [#39](https://github.com/leesihyeong17/linux-rtx-hybrid/issues/39)
+- PR: [#40](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/40)
 - 결론: **정확성 차이 아님.** 두 커널 모두 같은 RACK 판정을 하고 같은 최종 상태에 도달한다. 10ms 시점 값은 RACK reorder 타이머가 시험 프로그램의 `TCP_INFO` 읽기보다 먼저 울렸는지에 따라 달라지는 **타이밍 경합**이다.
 
 ## 1. 문제와 범위
