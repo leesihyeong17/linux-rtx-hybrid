@@ -1,6 +1,6 @@
 # A — STATS v2: N 계측 정의 보강 (ACK 시점 N, 1 단위 버킷, 포트 필터)
 
-브랜치 `a/stats-v2` · 기준 main `ffd6e62` (작성 당시 `ff2325b`, 11/23 rebase) · 작성 2026-11-16, 갱신 2026-11-23 · PR 번호: 생성 후 기입
+[A 이슈 #32](https://github.com/leesihyeong17/linux-rtx-hybrid/issues/32) · 관련 #28·#24·#16 · 브랜치 `a/stats-v2` · 기준 main `ffd6e62` (작성 당시 `ff2325b`, 11/23 rebase) · 작성 2026-11-16, 갱신 2026-11-23 · [PR #33](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/33)
 
 ## 1. 문제와 범위
 
