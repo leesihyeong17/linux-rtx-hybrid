@@ -1,0 +1,24 @@
+diff --git a/include/net/tcp_rtx.h b/include/net/tcp_rtx.h
+--- a/include/net/tcp_rtx.h
++++ b/include/net/tcp_rtx.h
+@@ -125,0 +126 @@
++	RTX_L_ACK,
+@@ -169,2 +170,11 @@
+-	if (rtx_stat_match(sk))
+-		this_cpu_inc(rtx_stats.n_hist[h][b]);
++	if (!rtx_stat_match(sk))
++		return;
++	this_cpu_inc(rtx_stats.n_hist[h][b]);
++	if (h == RTX_N_ACK) {
++#ifdef CONFIG_TCP_RTX_HYBRID
++		b = rtx_n_bucket(tcp_sk(sk)->rtx_recent_len);
++#else
++		b = 0;
++#endif
++		this_cpu_inc(rtx_stats.n_hist[RTX_L_ACK][b]);
++	}
+diff --git a/net/ipv4/tcp_rtx_stats.c b/net/ipv4/tcp_rtx_stats.c
+--- a/net/ipv4/tcp_rtx_stats.c
++++ b/net/ipv4/tcp_rtx_stats.c
+@@ -55,0 +56 @@
++	[RTX_L_ACK]	= "l_ack",
