@@ -32,10 +32,25 @@ class BenchmarkTests(unittest.TestCase):
                 self.assertEqual(values.get("TCP_RTX_RECENT_MAX"), "4" if flags[0] else None)
                 self.assertEqual(values["TCP_RTX_STATS"], "n")
 
+    def test_harness_export_matches_recorded_revision(self):
+        with tempfile.TemporaryDirectory() as temp:
+            digests = set()
+            for revision in bench.HARNESSES:
+                if subprocess.run(["git", "-C", bench.REPO, "cat-file", "-e", revision],
+                                  stderr=subprocess.DEVNULL).returncode:
+                    self.skipTest("fetch both pinned revisions to compare harness exports")
+                harness = Path(temp) / revision
+                digests.add(bench.export_harness(harness, revision))
+                expected = subprocess.check_output([
+                    "git", "-C", bench.REPO, "show",
+                    revision + ":rtx-project/tests/benchmark/benchmark.c"])
+                self.assertEqual((harness / "benchmark.c").read_bytes(), expected)
+            self.assertEqual(len(digests), 2)
+
     def test_pinned_collector_accepts_and_rejects_complete_boot_records(self):
         if subprocess.run(["git", "-C", bench.REPO, "cat-file", "-e", bench.HARNESS],
                           stderr=subprocess.DEVNULL).returncode:
-            self.skipTest("fetch PR #25 to run the pinned protocol integration test")
+            self.skipTest("fetch the pinned benchmark revision to run the protocol integration test")
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             harness = root / "harness"

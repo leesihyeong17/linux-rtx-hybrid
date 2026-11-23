@@ -20,7 +20,9 @@ from build_arm64 import FLAGS, artifacts, output, sha256, write_status
 from run_arm64_tcp import Network, PROJECT
 
 REPO = PROJECT.parent
-HARNESS = "4e204ffda288734f722674bb696d40efbb78e9d6"
+LEGACY_HARNESS = "4e204ffda288734f722674bb696d40efbb78e9d6"
+HARNESS = "0df8dcd98ac9a4affe7772a1a2b7c759da32d2ba"
+HARNESSES = (HARNESS, LEGACY_HARNESS)
 # Same C/H/Python bundle and digest convention as B's run_b_benchmark.sh.
 FILES = ("apply_overlay.py", "benchmark.c", "collect.py", "hooks.h",
          "render_report.py", "run_matrix.py", "test_benchmark.py")
@@ -33,10 +35,10 @@ def json_file(path, values):
     path.write_text(json.dumps(values, indent=2, sort_keys=True) + "\n")
 
 
-def export_harness(directory):
+def export_harness(directory, revision=HARNESS):
     directory.mkdir()
     for name in FILES:
-        blob = HARNESS + ":rtx-project/tests/benchmark/" + name
+        blob = revision + ":rtx-project/tests/benchmark/" + name
         (directory / name).write_bytes(subprocess.check_output(["git", "-C", REPO, "show", blob]))
     hashes = {name: sha256(directory / name) for name in FILES}
     return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
@@ -81,9 +83,11 @@ def build(args):
     evidence.mkdir()
     src, out = dest / "source", dest / "out"
     out.mkdir()
+    harness_sha = args.harness_sha or (
+        LEGACY_HARNESS if args.source_sha == LEGACY_HARNESS else HARNESS)
     state = dict(source_sha=args.source_sha, variant=args.variant, mode=args.mode, source=str(src),
                  output=str(out), compiler=output(["gcc", "--version"]), stage="prepare",
-                 harness_sha=HARNESS, seed_sha256=sha256(seed), argv=sys.argv[1:])
+                 harness_sha=harness_sha, seed_sha256=sha256(seed), argv=sys.argv[1:])
     print(evidence / "status.json", flush=True)
     env = dict(os.environ, LC_ALL="C")
     for key in ("MAKEFLAGS", "MFLAGS", "KBUILD_OUTPUT", "KBUILD_SRC", "KCONFIG_ALLCONFIG"):
@@ -102,7 +106,7 @@ def build(args):
             raise ValueError("production source already contains a test overlay")
         if args.mode != "tcp":
             harness = evidence / "harness"
-            state["benchmark_sha256"] = export_harness(harness)
+            state["benchmark_sha256"] = export_harness(harness, harness_sha)
             run([sys.executable, "-B", harness / "apply_overlay.py", src, harness, evidence,
                  "--mode", args.mode])
             state["overlay_sha256"] = sha256(evidence / "instrumentation.patch")
@@ -197,18 +201,19 @@ def collect(args, run, state):
     record = args.build_record.resolve(strict=True)
     identity = boot_identity(record)
     build_record = json.loads(record.read_text())
-    if identity["mode"] not in ("performance", "observation") or build_record["harness_sha"] != HARNESS:
+    harness_sha = build_record.get("harness_sha")
+    if identity["mode"] not in ("performance", "observation") or harness_sha not in HARNESSES:
         raise ValueError("expected a full B benchmark kernel from the pinned harness")
     if os.geteuid():
         raise PermissionError("dmesg and the isolated TCP smoke require sudo")
-    state.update(identity=identity, harness_sha=HARNESS)
+    state.update(identity=identity, harness_sha=harness_sha)
     logs, configs = run / "logs", run / "configs"
     logs.mkdir()
     configs.mkdir()
     with (logs / "dmesg-before.raw").open("wb") as stream:
         subprocess.run(["dmesg", "--raw"], stdout=stream, check=True)
     harness = run / "harness"
-    benchmark_hash = export_harness(harness)
+    benchmark_hash = export_harness(harness, harness_sha)
     if (benchmark_hash != build_record["benchmark_sha256"]
             or sha256(record.parent / "instrumentation.patch") != build_record["overlay_sha256"]):
         raise ValueError("benchmark/overlay hash mismatch")
@@ -230,7 +235,7 @@ def collect(args, run, state):
     manifest = dict(identity, **params, schema_version=1, contract_version="0.2",
                     run_id=identity["boot_id"], execution_mode="native_arm64_vm",
                     environment_id=sha256("/etc/machine-id"), host_arch=platform.machine(),
-                    target_arch="aarch64", benchmark_sha256=benchmark_hash, harness_sha=HARNESS,
+                    target_arch="aarch64", benchmark_sha256=benchmark_hash, harness_sha=harness_sha,
                     source_patch_sha256=hashlib.sha256(b"").hexdigest(),
                     instrumentation_patch_sha256=build_record["overlay_sha256"],
                     repeat=args.repeat, order=args.order, exit_code=0, timer="ktime_get_ns",
@@ -247,6 +252,8 @@ def main():
     b = commands.add_parser("build", help="create a fresh source copy and native build")
     b.add_argument("--directory", required=True, type=Path)
     b.add_argument("--source-sha", default=HARNESS, help="full production SHA available in this repo")
+    b.add_argument("--harness-sha", choices=HARNESSES,
+                   help="override the benchmark revision to reproduce an older build")
     b.add_argument("--base-config", required=True, type=Path)
     b.add_argument("--variant", choices=BACKENDS, required=True)
     b.add_argument("--mode", choices=("tcp", "performance", "observation"), required=True)

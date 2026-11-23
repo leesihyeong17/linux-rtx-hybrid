@@ -1,0 +1,46 @@
+linux-rtx-hybrid #36, ARM64 Ubuntu 20.04, base f78f5626a, kernel/fixture 0df8dcd98
+Source lines from rtx-project/.work/issue36-DdN2M5kB/
+
+verify.log  sha256=ba52be93af78b71818c22807ad46a842d969d3e591310d8d8912e9a7f1166ac6
+6  gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0
+12  aarch64
+34  BASELINE tail-only: CACHE=n TAIL=undef
+55  PASS Kconfig rb-basic CACHE/TAIL/HYBRID=n/n/n
+71  PASS Kconfig rb-cache CACHE/TAIL/HYBRID=y/n/n
+92  PASS Kconfig rb-tail CACHE/TAIL/HYBRID=y/y/n
+118  PASS Kconfig hybrid-ordered CACHE/TAIL/HYBRID=y/n/y
+136  PASS Kconfig hybrid-tail CACHE/TAIL/HYBRID=y/y/y
+154  b_benchmark.c:109:12:bm_valid	1136	static
+156  /src/net/ipv4/b_benchmark.c:153:1: warning: the frame size of 1040 bytes is larger than 1024 bytes [-Wframe-larger-than=]
+170  b_benchmark.c:109:12:bm_valid	80	static
+172  PASS ARM64 tcp_output.o performance DEBUG=n
+182  b_benchmark.c:109:12:bm_valid	80	static
+188  PASS ARM64 tcp_output.o performance DEBUG=y
+199  b_benchmark.c:109:12:bm_valid	80	static
+206  PASS ARM64 tcp_output.o observation DEBUG=n
+211  b_benchmark.c:109:12:bm_valid	80	static
+213  PASS ARM64 tcp_output.o observation DEBUG=y
+
+entry-status.json  sha256=50a7b83f07d0ea52c47e70673b1d94848dda2645dc7b20cc7b9b3bab8e0ddf52
+3    "variant": "rb-tail",
+4    "mode": "observation",
+8    "stage": "object_only",
+9    "harness_sha": "0df8dcd98ac9a4affe7772a1a2b7c759da32d2ba",
+25    "status": "PASS",
+30    "object_sha256": "962498a89dbe163689e2a7f77cce5fc6de6fcc0d051d4d3c278933086e1ef3c5"
+
+retry-boot.log  sha256=884d12c13d1778665f3826ae1985f925e26e24d888f329f6435e3063cfe09153
+58  TCP: RTXBENCH_CONFIG {"protocol":1,"contract_version":"0.2","mode":"observation","iterations":1,"warmup_ms":0,"workloads":10,"hybrid":1,"cache":1,"tail":1,"debug":1,"stats":0,"k":16,"tcp_sock_bytes":2144}
+87  TCP: RTXBENCH_SAMPLE {"workload_id":"split_alloc_failure","iteration":0,"operation":"split","n_before":16,"n_after":16,"l_before":16,"l_after":16,"attempts":1,"successes":0,"failures":1,"actual_ops":1,"return_code":-12,"elapsed_ns":8208,"timer_overhead_ns":128,"valid":1}
+89  TCP: RTXBENCH_DONE {"rows":10,"failed":0}
+
+retry-unit-linux.log  sha256=8ce911124563b91015a69dfa700879702e956371495b4c9f526c7a969898dd4e
+116  Ran 111 tests in 4.018s
+118  OK
+
+retry-unit-collector.log  sha256=e2788a78c4661d794667d4cfedebbf6fac5e9d65022439d9a115062e7932c652
+12  Ran 9 tests in 0.019s
+14  OK
+
+checkpatch.log  sha256=6418967f2a00d872c493cbc7f00886a0d417d4f70dd91cb504c70a04ed40c703
+1  total: 0 errors, 0 warnings, 62 lines checked

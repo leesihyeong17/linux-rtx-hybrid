@@ -62,8 +62,10 @@ cycles는 별도 항목이다. probe가 성공해도 이 실행은 workload cycl
 
 ## B 연산 벤치마크의 ARM64 실행
 
-PR #25의 `4e204ffda288734f722674bb696d40efbb78e9d6`에서
-`benchmark.c`, `hooks.h`, `apply_overlay.py`, `collect.py`를 읽는다.
+ARM64 실행기는 빌드할 때 고정한 커밋에서 `benchmark.c`, `hooks.h`,
+`apply_overlay.py`, `collect.py`를 읽는다. #36 이후 기본값은
+`0df8dcd98ac9a4affe7772a1a2b7c759da32d2ba`다. 기존 #25 빌드의
+`4e204ffda288734f722674bb696d40efbb78e9d6`도 수집 시 그대로 사용한다.
 B가 측정하는 append는 skb 하나의 `rtx_append()` 반환까지이며 승격과 RB
 재균형을 포함한다. split은 `tcp_fragment()` 전체 호출 시간이다.
 ARM64 실행기는 각 연산을 다시 구현하지 않고 빌드 입력, 부팅 신원, B 수집기
@@ -78,11 +80,12 @@ ARM64 실행기는 각 연산을 다시 구현하지 않고 빌드 입력, 부�
 비교군은 `rb-basic`(API 전환 RB), `rb-cache`, `rb-tail`, `hybrid-ordered`,
 `hybrid-tail`이다. 위 V0 예제는 과거 기준선이다. 캐시·tail 조건을 맞춘 비교는
 같은 production SHA·seed config에서 `rb-tail`과 `hybrid-tail` 등 합의한
-비교군을 만든다. 기본 production SHA는 위 #25 시점의 예비값이다. 통합 후에는
-`--source-sha`로 최종 커밋 전체 SHA를 지정한다.
+비교군을 만든다. 기본 production SHA는 #36의 벤치마크 수정 커밋이다.
+통합본을 비교할 때는 `--source-sha`로 최종 커밋 전체 SHA를 지정한다.
+#25 커밋을 직접 지정하면 당시 벤치마크를 사용한다. 다른 과거 빌드를
+재현할 때는 빌드 기록의 `harness_sha`를 `--harness-sha`에 전달한다.
 
-저장소 루트에서 실행한다. 새 체크아웃에 B의 Git 객체가 없으면 먼저
-`git fetch origin refs/pull/25/head`로 받는다. 각 빌드는 새 경로에 소스 사본·
+저장소 루트에서 실행한다. 얕은 복제본에서는 사용할 소스와 벤치마크 커밋을 먼저 받는다. 각 빌드는 새 경로에 소스 사본·
 커널 산출물·증거를 보존하므로 여유 있는 파일시스템을 지정한다. 동일한 seed를
 모든 비교군에 사용한다. 아래는 한 조합의 예시다.
 
