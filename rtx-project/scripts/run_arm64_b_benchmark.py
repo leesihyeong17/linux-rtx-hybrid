@@ -56,10 +56,14 @@ def extract_tree(revision, directory, log):
             raise ValueError("git archive did not complete")
 
 
-def config_values(variant, k, suffix):
+def config_values(variant, k, suffix, mode="tcp"):
     values = dict(ARM64="y", NET_NS="y", VETH="y", NET_SCH_NETEM="y", PRINTK="y",
                   LOCALVERSION='"' + suffix + '"', LOCALVERSION_AUTO="n", LOG_BUF_SHIFT="23",
                   TCP_RTX_DEBUG="n", TCP_RTX_STATS="n")
+    if mode == "n-distribution":
+        if variant != "hybrid-tail":
+            raise ValueError("N distribution requires the hybrid-tail backend")
+        values.update(NET_SCHED="y", TCP_RTX_STATS="y")
     for field, enabled in zip(SYMBOLS, BACKENDS[variant]):
         values["TCP_RTX_" + field] = "y" if enabled else "n"
     if BACKENDS[variant][0]:
@@ -87,7 +91,11 @@ def build(args):
         LEGACY_HARNESS if args.source_sha == LEGACY_HARNESS else HARNESS)
     state = dict(source_sha=args.source_sha, variant=args.variant, mode=args.mode, source=str(src),
                  output=str(out), compiler=output(["gcc", "--version"]), stage="prepare",
-                 harness_sha=harness_sha, seed_sha256=sha256(seed), argv=sys.argv[1:])
+                 seed_sha256=sha256(seed), argv=sys.argv[1:])
+    if args.mode == "n-distribution":
+        state["k"] = args.k
+    else:
+        state["harness_sha"] = harness_sha
     print(evidence / "status.json", flush=True)
     env = dict(os.environ, LC_ALL="C")
     for key in ("MAKEFLAGS", "MFLAGS", "KBUILD_OUTPUT", "KBUILD_SRC", "KCONFIG_ALLCONFIG"):
@@ -104,7 +112,7 @@ def build(args):
         if any((src / "net/ipv4" / name).exists()
                for name in ("b_benchmark.c", "b_verify_hooks.h")):
             raise ValueError("production source already contains a test overlay")
-        if args.mode != "tcp":
+        if args.mode in ("performance", "observation"):
             harness = evidence / "harness"
             state["benchmark_sha256"] = export_harness(harness, harness_sha)
             run([sys.executable, "-B", harness / "apply_overlay.py", src, harness, evidence,
@@ -114,7 +122,7 @@ def build(args):
         config = out / ".config"
         shutil.copy2(evidence / "seed.config", config)
         suffix = f"-d30-{args.variant}-{args.mode}-k{args.k}-{args.source_sha[:8]}"
-        values = config_values(args.variant, args.k, suffix)
+        values = config_values(args.variant, args.k, suffix, args.mode)
         edit = [src / "scripts/config", "--file", config]
         for symbol, value in values.items():
             if value in ("y", "n"):
@@ -136,6 +144,8 @@ def build(args):
             subprocess.run([sys.executable, src / "scripts/diffconfig", evidence / "seed.config", config],
                            stdout=changes, check=True)
         targets = ["net/ipv4/tcp_output.o"] if args.object_only else ["Image", "modules", "dtbs"]
+        if args.object_only and args.mode == "n-distribution":
+            targets += ["net/ipv4/tcp_input.o", "net/ipv4/tcp_rtx_stats.o"]
         state["stage"] = "compile"
         write_status(evidence, state)
         run(make + targets)
@@ -144,6 +154,8 @@ def build(args):
             raise ValueError("release or configuration changed during build")
         if args.object_only:
             state.update(stage="object_only", object_sha256=sha256(out / targets[0]))
+            if args.mode == "n-distribution":
+                state["object_hashes"] = {name: sha256(out / name) for name in targets}
         else:
             state.update(artifacts(out), stage="built")
 
@@ -251,15 +263,15 @@ def main():
     commands = parser.add_subparsers(dest="action", required=True)
     b = commands.add_parser("build", help="create a fresh source copy and native build")
     b.add_argument("--directory", required=True, type=Path)
-    b.add_argument("--source-sha", default=HARNESS, help="full production SHA available in this repo")
+    b.add_argument("--source-sha", help="full production SHA; required for N distribution")
     b.add_argument("--harness-sha", choices=HARNESSES,
                    help="override the benchmark revision to reproduce an older build")
     b.add_argument("--base-config", required=True, type=Path)
     b.add_argument("--variant", choices=BACKENDS, required=True)
-    b.add_argument("--mode", choices=("tcp", "performance", "observation"), required=True)
+    b.add_argument("--mode", choices=("tcp", "performance", "observation", "n-distribution"), required=True)
     b.add_argument("--k", type=int, default=16)
     b.add_argument("--jobs", type=int, default=2)
-    b.add_argument("--object-only", action="store_true", help="compile one object for development")
+    b.add_argument("--object-only", action="store_true", help="compile the relevant TCP objects only")
     c = commands.add_parser("collect", help="collect this boot once and validate using B's collector")
     c.add_argument("--build-record", required=True, type=Path)
     c.add_argument("--repeat", required=True, type=int, help="independent boot replicate, starts at 1")
@@ -269,6 +281,9 @@ def main():
     if args.action == "build":
         if not 1 <= args.k <= 1024 or args.jobs < 1:
             parser.error("invalid K or jobs")
+        if args.mode == "n-distribution" and (not args.source_sha or args.variant != "hybrid-tail" or args.harness_sha):
+            parser.error("n-distribution needs an explicit --source-sha, --variant hybrid-tail and no harness")
+        args.source_sha = args.source_sha or HARNESS
         build(args)
     else:
         if min(args.repeat, args.order) < 1:

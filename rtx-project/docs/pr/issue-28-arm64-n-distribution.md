@@ -4,6 +4,9 @@
 [성능 비교 #16](https://github.com/leesihyeong17/linux-rtx-hybrid/issues/16) ·
 [K 검토 #24](https://github.com/leesihyeong17/linux-rtx-hybrid/issues/24)
 
+팀 VM의 STATS v2 본 측정은 [새 커널 빌드와 7조건 실행 절차](issue-28-arm64-stats-v2.md)를 따른다.
+아래의 C23 기록은 v1 무손실 예비 실행에 사용한다.
+
 ## 무엇을 세는가
 
 `N`은 한 소켓의 재전송 큐에 skb를 연결한 **직후** 그 큐의 skb 수다. GSO skb 하나는
@@ -31,18 +34,16 @@ ARM64 UTM의 `5.4.214-rtx-c23-hybrid`를 사용한다. production은 `e4de76000`
 fixture는 `01acce2b2`, GCC는 9.4.0이며 DEBUG/STATS on, K=16이다. 실제 실행
 시 빌드 기록 및 설치 Image/config/System.map을 대조한다. K=16은 관측용 현재값이다.
 
-VM 콘솔에서 다른 TCP 시험을 멈추고 다음을 실행한다. 이 명령은 **기본적으로 무손실
-예비 실행을 먼저** 하며 그 실행이 통과해야 본 측정이 시작된다.
+VM 콘솔에서 다른 TCP 시험을 멈추고 다음을 실행한다.
 
 ```bash
 cd ~/tcp-rtx/linux-rtx-hybrid
 uname -r
 sudo python3 -B rtx-project/scripts/run_arm64_n_distribution.py \
-  --build-run rtx-project/.work/d-cbuild-resume-20261118-qrqu_pkd
+  --build-run rtx-project/.work/d-cbuild-resume-20261118-qrqu_pkd --pilot-only
 ```
 
-예비 실행만 하려면 `--pilot-only`를 추가한다. 다른 VM에서는 그 VM에서 검증한
-C23 HYBRID 빌드의 기록 경로를 지정한다.
+다른 VM에서는 그 VM에서 검증한 C23 HYBRID 빌드의 기록 경로를 지정한다.
 
 | 조건 | 손실(양쪽 egress 각각) | 설정한 추가 RTT | 재정렬 |
 | --- | --- | --- | --- |

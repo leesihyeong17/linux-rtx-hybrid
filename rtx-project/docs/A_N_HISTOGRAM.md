@@ -21,13 +21,13 @@ N = 소켓 하나의 재전송 큐에 있는 **skb 수**(`tcp_sock::rtx_count`).
 
 ## 2. 측정 절차 (D, ARM64 UTM)
 
-측정은 D의 수집기 `scripts/run_arm64_n_distribution.py`(PR #29, #28)로 한다. 이 PR에서 수집기가 STATS v2 출력을 읽도록 고쳤다. 실행 방법과 조건표, 산출물은 [D 문서](pr/issue-28-arm64-n-distribution.md)가 기준이다. 아래는 v2 커널에서 달라지는 점만 정리한다.
+측정은 D의 `scripts/run_arm64_n_distribution.py`로 한다. 팀 VM의 빌드, 실행 명령과 결과 판독은 [D의 STATS v2 실행 절차](pr/issue-28-arm64-stats-v2.md)를 따른다.
 
 ### 2.1 커널
 
 | 용도 | config | 비고 |
 | --- | --- | --- |
-| N 분포 + 승격·L 제거 비율 + SACK 검색 비용 | 하이브리드 K=16 + `CONFIG_TCP_RTX_STATS=y`. PR #25 머지 후에는 V4(`HYBRID`+`CACHE`+`TAIL`) | 수집기는 `5.4.214-rtx-c23-hybrid` 빌드 기록과 실행 커널을 대조한다. STATS v2를 포함한 SHA로 다시 빌드해야 한다 |
+| N 분포 + 승격·L 제거 비율 + SACK 검색 비용 | V4, K=16, HYBRID/CACHE/TAIL/STATS on, DEBUG off | 일반 커널의 빌드 기록, 설치된 Image·config와 부팅 중인 커널의 GNU build ID를 대조한다 |
 | (선택) RB 대조 | 통합 RB 기본형 + `STATS=y` | N은 TCP 동작이 정하므로 백엔드와 거의 무관하다. 차이가 크면 원인을 따로 본다. 현재 수집기는 HYBRID 빌드만 받는다 |
 
 V0에는 계측 API가 없으므로 결과를 **"V0 실측"이라 부르지 않는다.** 계측 커널 SHA와 config를 기록한다. `DEBUG`를 켜도 수집기는 전후 차분을 쓰므로 부팅 자체 테스트 값은 빠진다.
@@ -39,7 +39,7 @@ V0에는 계측 API가 없으므로 결과를 **"V0 실측"이라 부르지 않�
 | 히스토그램 | `n_hist` 16구간 (삽입 직후 N) | `n_link`(삽입 직후 N)와 `n_ack`(ACK 처리 시 N), 각 74구간 |
 | 집계 범위 | VM 전체 (SSH 등 배경 TCP 포함) | **포트 5001만.** 시작할 때 `port 5001`을 쓰고, 끝나면(실패해도) 원래 필터로 되돌린다 |
 | 시험 전송 포트 | **5001** (형식과 무관하게 같은 서버 포트. v1은 필터가 없어 포트와 상관없이 VM 전체를 센다) | 5001 (netns마다 새로 만들므로 충돌 없음) |
-| 시도별 검사 | 카운터 감소·빈 표본 거부 | 위에 더해 `n_link` 표본 = 삽입 수, `n_ack` 표본 = `ack_clean`, 필터·형식이 측정 중 바뀌지 않았는지 |
+| 시도별 검사 | 카운터 감소·빈 표본 거부, 무손실 예비 실행 전용 | 위에 더해 `n_link` 표본 = 삽입 수, `n_ack` 표본 = `ack_clean`, 양쪽 netns의 TcpExt 증가량과 RTX shift 3종 일치 |
 | 시도별 JSON | `histogram`, `percent`, 카운터 차이 | 위에 더해 `histograms`(둘 다), `ack_samples`, `le_share`(N≤1,4,8,16,32,64 비율), `filter_port` |
 | `distribution.csv` | `histogram` 열 = `n_hist` | `histogram` 열로 `n_link`/`n_ack` 구분, 각 74행 |
 
@@ -66,7 +66,7 @@ v2 수집기는 시도마다 다음을 검사하고, 어긋나면 그 시도를 
 | --- | --- |
 | `n_link` 표본 수 = `insert_append + insert_ordered + insert_split` 증가량 | 삽입마다 정확히 한 번 기록됐는지 |
 | `n_ack` 표본 수 = `ack_clean` 증가량 (0이면 실패) | ACK 처리마다 정확히 한 번 기록됐는지 |
-| `filter_port`와 출력 형식이 전후 같음 | 측정 중 누가 필터를 바꾸지 않았는지 |
+| 전후 `filter_port=5001`, 출력 형식 v2 | 측정 포트와 커널 형식 확인 |
 
 ## 3. 계산식
 
