@@ -1,0 +1,246 @@
+DS uname 5.4.214+
+rtx_selftest: find_cover sweep base lookups=2608 mismatches=0 control_diff=44 avg_steps=2.97 max_steps=5
+rtx_selftest: find_cover sweep wrap-inside lookups=2608 mismatches=0 control_diff=44 avg_steps=2.97 max_steps=5
+rtx_selftest: find_cover sweep wrap-first lookups=2608 mismatches=0 control_diff=44 avg_steps=2.97 max_steps=5
+rtx_selftest: 569 passed, 0 failed
+DS iter 1
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 2
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 3
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 4
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 5
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 6
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 7
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 8
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 9
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 10
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 11
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 12
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 13
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 14
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 15
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 16
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 17
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 18
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 19
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 20
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 21
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 22
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 23
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 24
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 25
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 26
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 27
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 28
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 29
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 30
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 31
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 32
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 33
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 34
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 35
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 36
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 37
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 38
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 39
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS iter 40
+RTX_ACCOUNT DSACK_OFO unacked=4 sacked=2 lost=1 retrans=1
+RTX_EXTRA DSACK_OFO ca_state=3 reordering=3 rtt_us=0 rttvar_us=0 rto_us=200000 total_retrans=1
+RTX_LATER DSACK_OFO +6ms lost=1 retrans=1 ca_state=3 total_retrans=1
+RTX_ACCOUNT DSACK_OFO drained=1 total_retrans=1
+RTX_NATIVE PACKETS_COMPLETE (GSO/trim-path evidence still required)
+DS done

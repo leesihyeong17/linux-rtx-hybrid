@@ -1,0 +1,73 @@
+logs/e1-hyb16-dbgon.txt: iters=30 complete=30 fail=0 kernel_warn=0
+  10ms: {'lost=0 retrans=0': 5, 'lost=1 retrans=1': 25}
+  drained: {'total_retrans=2': 30}
+logs/e1-rb-dbgon.txt: iters=30 complete=30 fail=0 kernel_warn=0
+  10ms: {'lost=0 retrans=0': 2, 'lost=1 retrans=1': 28}
+  drained: {'total_retrans=2': 30}
+logs/e1-v4-dbgon.txt: iters=30 complete=30 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 29, 'lost=0 retrans=0': 1}
+  drained: {'total_retrans=2': 30}
+logs/e2-hyb16-dbgon.txt: iters=40 complete=40 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 37, 'lost=0 retrans=0': 3}
+  later: {'+300ms lost=2 retrans=1 ca_state=4': 40}
+  drained: {'total_retrans=2': 40}
+logs/e2-rb-dbgon.txt: iters=40 complete=40 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 36, 'lost=0 retrans=0': 4}
+  later: {'+300ms lost=2 retrans=1 ca_state=4': 40}
+  drained: {'total_retrans=2': 40}
+logs/e3-hyb16-dbgon.txt: iters=40 complete=40 fail=0 kernel_warn=0
+  10ms: {'lost=0 retrans=0': 8, 'lost=1 retrans=1': 32}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 40}
+  drained: {'total_retrans=1': 40}
+logs/e3-rb-dbgon.txt: iters=40 complete=40 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 40}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 40}
+  drained: {'total_retrans=1': 40}
+logs/e4-hyb16.txt: iters=80 complete=80 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 68, 'lost=0 retrans=0': 12}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 80}
+  drained: {'total_retrans=1': 80}
+logs/e4-rb.txt: iters=80 complete=80 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 77, 'lost=0 retrans=0': 3}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 80}
+  drained: {'total_retrans=1': 80}
+logs/e5-hyb16-poll.txt: iters=80 complete=80 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 80}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 80}
+  poll first state (3=Recovery/loss already marked, 1=Disorder/timer pending): {'first_ca_state=1': 80}
+  drained: {'total_retrans=1': 80}
+logs/e5-rb-poll.txt: iters=80 complete=80 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 80}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 80}
+  poll first state (3=Recovery/loss already marked, 1=Disorder/timer pending): {'first_ca_state=3': 80}
+  drained: {'total_retrans=1': 80}
+logs/e6-hyb16-poll.txt: iters=20 complete=20 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 20}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 20}
+  poll first state (3=Recovery/loss already marked, 1=Disorder/timer pending): {'first_ca_state=1': 20}
+  drained: {'total_retrans=1': 20}
+logs/e6-rb-poll.txt: iters=20 complete=20 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 20}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 20}
+  poll first state (3=Recovery/loss already marked, 1=Disorder/timer pending): {'first_ca_state=3': 19, 'first_ca_state=1': 1}
+  drained: {'total_retrans=1': 20}
+logs/e7-hyb16-printk.txt: iters=25 complete=25 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 22, 'lost=0 retrans=0': 3}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 25}
+  RACK first decision (printk build): {'timer': 25}
+  drained: {'total_retrans=1': 25}
+logs/e7-rb-printk.txt: iters=25 complete=25 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 25}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 25}
+  RACK first decision (printk build): {'timer': 25}
+  drained: {'total_retrans=1': 25}
+logs/e8-hyb16-poll-arrival.txt: iters=20 complete=20 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 20}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 20}
+  poll first state (3=Recovery/loss already marked, 1=Disorder/timer pending): {'first_ca_state=3': 20}
+  drained: {'total_retrans=1': 20}
+logs/e8-rb-poll-arrival.txt: iters=20 complete=20 fail=0 kernel_warn=0
+  10ms: {'lost=1 retrans=1': 20}
+  later: {'+6ms lost=1 retrans=1 ca_state=3': 20}
+  poll first state (3=Recovery/loss already marked, 1=Disorder/timer pending): {'first_ca_state=3': 20}
+  drained: {'total_retrans=1': 20}
