@@ -4,7 +4,8 @@
 Each mutant is one small, plausible bug applied to a copy of the real
 include/net/tcp_rtx.h. Every mutant is built with build.sh -H and run on
 the scenarios and on random seeds. A mutant that passes everything means
-the test has a blind spot.
+the test has a blind spot. Only mutants that built and ran count as
+KILLED; a mutant that does not build is an error of the check itself.
 
   mutants.py --repo REPO --work DIR [--seeds 0:200]
 """
@@ -101,6 +102,7 @@ def main():
     src = open(os.path.join(args.repo, "include/net/tcp_rtx.h")).read()
     os.makedirs(args.work, exist_ok=True)
     survived = 0
+    build_failed = 0
     print("mutants=%d seeds=%s" % (len(MUTANTS), args.seeds))
     for name, desc, old, new in MUTANTS:
         if src.count(old) == 0:
@@ -120,7 +122,12 @@ def main():
                             "-H", hdr, out], capture_output=True, text=True,
                            env=env)
         if b.returncode:
-            print("MUTANT %-32s KILLED build failed" % name)
+            # A mutant that does not compile was never run, so it says
+            # nothing about the harness. Report it and fail the check.
+            build_failed += 1
+            err = (b.stderr or b.stdout).strip().splitlines()
+            print("MUTANT %-32s BUILD_FAILED rc=%d: %s" % (
+                name, b.returncode, " | ".join(err[-3:])[:200]))
             continue
         bins = rtx_model.list_bins(out)
         ks = sorted({k for _, k in bins},
@@ -144,8 +151,8 @@ def main():
         else:
             survived += 1
             print("MUTANT %-32s SURVIVED (%s)" % (name, desc))
-    print("survived=%d" % survived)
-    return 1 if survived else 0
+    print("survived=%d build_failed=%d" % (survived, build_failed))
+    return 1 if survived or build_failed else 0
 
 
 if __name__ == "__main__":
