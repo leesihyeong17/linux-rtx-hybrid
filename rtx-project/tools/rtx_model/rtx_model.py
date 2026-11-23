@@ -378,15 +378,41 @@ def hist_bucket(n, hist):
 # ---------------------------------------------------------------------------
 # binaries
 
+_EXPECTED = {}
+
+
+def load_expected(bin_dir):
+    """Return {name: {key: value}} from build.sh's expected.conf."""
+    path = os.path.join(bin_dir, "expected.conf")
+    if path not in _EXPECTED:
+        if not os.path.exists(path):
+            raise SystemExit("%s missing: rebuild with build.sh" % path)
+        table = {}
+        with open(path) as fp:
+            for line in fp:
+                name, *pairs = line.split()
+                table[name] = dict(p.split("=", 1) for p in pairs)
+        _EXPECTED[path] = table
+    return _EXPECTED[path]
+
+
 def list_bins(bin_dir):
     """Return [(name, k)] for harness binaries in bin_dir."""
+    expected = load_expected(bin_dir)
     bins = []
     for name in sorted(os.listdir(bin_dir)):
         m = re.fullmatch(r"rb(-plain|-cache|-tail)?|hyb-k(\d+)(-plain|-tail)?",
                          name)
         if not m or not os.access(os.path.join(bin_dir, name), os.X_OK):
             continue
+        if name not in expected:
+            raise SystemExit("%s: no build configuration in expected.conf"
+                             % name)
         bins.append((name, int(m.group(2)) if m.group(2) else RB))
+    missing = sorted(set(expected) - {n for n, _ in bins})
+    if missing:
+        raise SystemExit("built but missing in %s: %s" % (
+            bin_dir, ", ".join(missing)))
     if not bins:
         raise SystemExit("no harness binaries in %s (run build.sh)" % bin_dir)
     return bins
@@ -398,16 +424,25 @@ def run_bin(path, text):
     return p.returncode, p.stdout.splitlines(), p.stderr
 
 
-def check_output(name, k, rc, lines, tr, stderr):
-    """Return None if OK, else a description of the first mismatch."""
+def check_output(name, k, rc, lines, tr, stderr, want=None):
+    """Return None if OK, else a description of the first mismatch.
+
+    want is the configuration build.sh used for this binary. The binary's
+    CONF line must match it before its output is compared.
+    """
     if not lines or not lines[0].startswith("CONF "):
         return ("no output (rc=%d%s) %s" % (
             rc, " signal %d" % -rc if rc < 0 else "",
             stderr.strip()[:200])).rstrip()
     conf = lines[0]
-    want_conf = ("hybrid=0 k=0" if k is RB else "hybrid=1 k=%d" % k)
-    if want_conf not in conf:
-        return "CONF mismatch: %s" % conf
+    got = dict(p.split("=", 1) for p in conf.split()[1:])
+    if want is None:
+        want = {"hybrid": "0", "k": "0"} if k is RB else {
+            "hybrid": "1", "k": str(k)}
+    bad = ["%s=%s (want %s)" % (key, got.get(key), val)
+           for key, val in sorted(want.items()) if got.get(key) != val]
+    if bad:
+        return "CONF mismatch: %s: %s" % (", ".join(bad), conf)
     hist = re.search(r"hist=(\w+)", conf).group(1)
     expected = tr.expected_for(k, "nbucket=1" in conf)
     if hist != "none":
@@ -429,12 +464,13 @@ def check_output(name, k, rc, lines, tr, stderr):
 def run_trace(bin_dir, bins, tr, label, fail_dir):
     """Run one trace on all binaries. Return list of failure dicts."""
     text = tr.text()
+    expected = load_expected(bin_dir)
     fails = []
     for name, k in bins:
         if k not in tr.ks:
             continue
         rc, lines, err = run_bin(os.path.join(bin_dir, name), text)
-        res = check_output(name, k, rc, lines, tr, err)
+        res = check_output(name, k, rc, lines, tr, err, expected[name])
         if res is None:
             continue
         f = {"trace": label, "bin": name}
