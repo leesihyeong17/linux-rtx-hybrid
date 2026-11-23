@@ -1,5 +1,7 @@
 # #36 TAIL 단독 설정과 ARM64 벤치마크 스택
 
+[PR #37](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/37)
+
 [이슈 #36](https://github.com/leesihyeong17/linux-rtx-hybrid/issues/36)은 #25 병합 후 발견한 설정 문제, 트리 삽입 전제, ARM64 컴파일 경고를 다룬다. 기준은 `main`의 `f78f5626a`, 커널과 벤치마크 수정본은 `0df8dcd98`이다.
 
 ## 구현
