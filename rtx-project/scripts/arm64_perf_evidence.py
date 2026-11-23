@@ -29,7 +29,7 @@ def running_build_id(notes):
     raise ValueError("no GNU build ID in running kernel notes")
 
 
-def boot_identity(record):
+def boot_identity(record, *, n_distribution=False):
     build = json.loads(record.read_text())
     release = platform.release()
     if (platform.machine() != "aarch64" or build["status"] != "PASS" or build["stage"] != "built"
@@ -40,13 +40,28 @@ def boot_identity(record):
     out = Path(build["output"])
     config = out / ".config"
     image = build["hashes"]["arch/arm64/boot/Image"]
-    for path, expected in [(config, build["config_sha256"]),
-                           (Path("/boot/config-" + release), build["config_sha256"]),
-                           (Path("/boot/vmlinuz-" + release), image),
-                           (out / "vmlinux", build["hashes"]["vmlinux"])]:
+    artifacts = [(config, build["config_sha256"]),
+                 (Path("/boot/config-" + release), build["config_sha256"]),
+                 (Path("/boot/vmlinuz-" + release), image),
+                 (out / "vmlinux", build["hashes"]["vmlinux"])]
+    if n_distribution:
+        artifacts.append((out / "arch/arm64/boot/Image", image))
+    for path, expected in artifacts:
         if sha256(path) != expected:
             raise ValueError("artifact mismatch: " + str(path))
-    if re.search(r"^CONFIG_TCP_RTX_(DEBUG|STATS)=y$", config.read_text(), re.M):
+    config_text = config.read_text()
+    if n_distribution:
+        k = build.get("k")
+        if (build.get("mode") != "n-distribution" or build.get("variant") != "hybrid-tail"
+                or "overlay_sha256" in build or type(k) is not int or not 1 <= k <= 1024):
+            raise ValueError("expected a production hybrid-tail N distribution build")
+        required = {"CONFIG_TCP_RTX_" + option + "=y" for option in ("HYBRID", "CACHE", "TAIL", "STATS")}
+        required.add("CONFIG_TCP_RTX_RECENT_MAX=" + str(k))
+        if (not required.issubset(config_text.splitlines())
+                or "CONFIG_TCP_RTX_DEBUG=y" in config_text.splitlines()
+                or not release.endswith(f"-hybrid-tail-n-distribution-k{k}-{build['source_sha'][:8]}")):
+            raise ValueError("N distribution kernel configuration or release differs from build record")
+    elif re.search(r"^CONFIG_TCP_RTX_(DEBUG|STATS)=y$", config_text, re.M):
         raise ValueError("performance requires RTX DEBUG/STATS off")
     build_id = running_build_id(Path("/sys/kernel/notes").read_bytes())
     elf = subprocess.check_output(["readelf", "-n", str(out / "vmlinux")], text=True)
