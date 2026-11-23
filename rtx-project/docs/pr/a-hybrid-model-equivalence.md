@@ -76,6 +76,7 @@ API·도메인 영향: 없음. 커널 코드를 바꾸지 않았다.
 | main `ffd6e62` | 8개 | 17개 / 명령 10,055 · 불일치 0 | seed 0~4999 / 명령 13,308,809 · 불일치 0 | 14/14 검출 (TAIL·v2 전용 3개 N/A) |
 | PR #25 `4e204ff` (B, CACHE·TAIL) | 14개 (V2·V3·V4 포함) | 17개 / 명령 10,055 · 불일치 0 | seed 0~1999 / 명령 5,323,293 · 불일치 0 | 16/16 검출 (v2 전용 1개 N/A) |
 | PR #33 `5a75c90` (A, STATS v2) = 현재 main `0f2987d` 헤더 | 8개 | 17개 / 명령 10,055 · 불일치 0 | seed 0~1999 / 명령 5,323,293 · 불일치 0 | 15/15 검출 (TAIL 전용 2개 N/A) |
+| main `e5cdd9a` (#25·#33·#37 머지 후, B 리뷰 반영 도구) | 14개 | 17개 / 명령 10,055 · 불일치 0 | seed 0~1999 / 명령 5,323,293 · 불일치 0 | 17/17 검출, 빌드 실패 0 (변이 seed 0~39) |
 
 "명령 수"는 trace 하나의 명령 수 합계이며, 각 빌드가 같은 trace를 모두 실행한다(main 랜덤은 1,330만 × 8개 빌드). STATS 빌드의 카운터·히스토그램 비교는 trace마다 끝에서 한 번 한다.
 
@@ -135,6 +136,7 @@ TAIL 전용 2개를 뺀 모든 변이가 **DEBUG·STATS off 빌드(`hyb-k4-plain
 | [`evidence/A/1123_model_ffd6e62.txt`](../../evidence/A/1123_model_ffd6e62.txt) | main 하이브리드·RB 동등성, 카운터·`n_hist` v1 정확성, 변이 검출 |
 | [`evidence/A/1123_model_4e204ff.txt`](../../evidence/A/1123_model_4e204ff.txt) | PR #25 V2·V3·V4 설정 동등성, TAIL 변이 검출 |
 | [`evidence/A/1123_model_5a75c90.txt`](../../evidence/A/1123_model_5a75c90.txt) | PR #33 STATS v2 카운터·`n_link`·`rtx_n_bucket` 정확성 |
+| [`evidence/A/1123_model_e5cdd9a.txt`](../../evidence/A/1123_model_e5cdd9a.txt) | 통합 main(V2·V3·V4 포함) 동등성, 바이너리별 설정 대조, 변이 17종 전부 빌드·검출 |
 
 각 로그 맨 위에 대상 SHA, 도구 커밋, 복사한 커널 입력 파일 SHA-256, 바이너리별 `CONF`(K·DEBUG·STATS·CACHE·TAIL) 줄이 있다. 도구 커밋 해시는 패치를 `git am`하면 바뀐다. 도구 내용 동일성은 이 PR의 커밋으로 확인한다.
 
@@ -155,4 +157,4 @@ TAIL 전용 2개를 뺀 모든 변이가 **DEBUG·STATS off 빌드(`hyb-k4-plain
 - 기준 모델은 설계 문서의 소속 규칙을 따르므로, 규칙 자체가 성능상 나쁜 선택인지는 판단하지 않는다(그건 N 측정·Go/No-Go 몫).
 - x86_64 gcc 13.3에서만 실행. ARM64·gcc 9.4는 미실행(정확성 증거라 환경 차이는 허용, 가이드 2절).
 - 모델은 `rtx_count`·N 히스토그램의 **계산이 맞는지**만 보인다. 실제 트래픽의 N 분포는 D의 #28 측정 몫이다.
-- 후속: PR #25가 main에 머지되면 통합 SHA(#25 + #33)로 `a_model_test.sh`를 다시 돌려 작업채팅 ④(PR #17·#25 독립 검증)의 증거로 쓴다.
+- 통합 main `e5cdd9a`(#25 + #33)로 다시 돌린 결과가 `1123_model_e5cdd9a.txt`다(작업채팅 ④ 증거).
