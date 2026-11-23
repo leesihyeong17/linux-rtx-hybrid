@@ -1,5 +1,7 @@
 # #16 B 최소 벤치마크와 공통 tail 최적화
 
+ARM64 실제 TCP와 연산별 후속 측정, 기본값 유지 근거는 [#16 ARM64 비교 결과](issue-16-arm64-comparison.md)에 있다.
+
 - 이슈: [#16 B·D 성능 비교](https://github.com/leesihyeong17/linux-rtx-hybrid/issues/16)
 - PR: [#25](https://github.com/leesihyeong17/linux-rtx-hybrid/pull/25)
 - 구현 커밋: Core `00d5aafd6`, 벤치마크·계약 `852d1486a`

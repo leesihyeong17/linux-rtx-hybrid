@@ -1,0 +1,13 @@
+base,target,symbol,before,after
+v3,v4,CONFIG_TCP_RTX_HYBRID,n,y
+v3,v4,CONFIG_TCP_RTX_RECENT_MAX,absent,16
+v3-micro,v4-micro,CONFIG_TCP_RTX_HYBRID,n,y
+v3-micro,v4-micro,CONFIG_TCP_RTX_RECENT_MAX,absent,16
+v3-batch-micro,v4-batch-micro,CONFIG_TCP_RTX_HYBRID,n,y
+v3-batch-micro,v4-batch-micro,CONFIG_TCP_RTX_RECENT_MAX,absent,16
+v4,v4-k4,CONFIG_TCP_RTX_RECENT_MAX,16,4
+rb-basic,rb-cache,CONFIG_TCP_RTX_CACHE,n,y
+rb-basic,rb-cache,CONFIG_TCP_RTX_TAIL,absent,n
+rb-cache,v3,CONFIG_TCP_RTX_TAIL,n,y
+v3,v3-stats,CONFIG_TCP_RTX_STATS,n,y
+v4,v4-stats,CONFIG_TCP_RTX_STATS,n,y

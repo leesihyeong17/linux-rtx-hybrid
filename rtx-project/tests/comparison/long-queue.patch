@@ -1,0 +1,33 @@
+--- a/guest.py
++++ b/guest.py
+@@ -48,22 +48,22 @@
+             return
+         net.setup()
+         for condition, loss, rtt, reorder, sack in [
+-                ("clean", 0, 0, 0, 1), ("impaired", 0.5, 4, 10, 1),
+-                ("no-sack", 0.5, 4, 10, 0)]:
++                ("long", 0, 40, 0, 1)]:
+             for side, (ns, link) in enumerate(zip(net.names, net.links)):
+                 base = ["ip", "netns", "exec", ns]
+                 net.command(base + ["/bin/busybox","sysctl","-w",f"net.ipv4.tcp_sack={sack}"])
+-                net.command(base + ["tc","qdisc","replace","dev",link,"root","netem"] +
++                net.command(base + ["ethtool","-K",link,"tso","off","gso","off","gro","off"])
++                net.command(base + ["ip","link","show","dev",link])
++                net.command(base + ["tc","qdisc","replace","dev",link,"root","netem","limit","10000"] +
+                             netem(loss, rtt, reorder if side==0 else 0))
+-                if condition == "clean":
+-                    net.command(base + ["ethtool","-k",link])
+-            for workload in ("bulk","rr"):
++                net.command(base + ["ethtool","-k",link])
++            for workload in ("bulk",):
+                 prefix = condition + "-" + workload
+-                trial(net, out/(prefix+"-warm"), workload, 0.25, [None,None])
++                trial(net, out/(prefix+"-warm"), workload, 1.0, [None,None])
+                 if stats.exists():
+                     stats.write_text("0\n")
+                 before = resource.getrusage(resource.RUSAGE_CHILDREN)
+-                value = trial(net, out/prefix, workload, 1.0, [None,None])
++                value = trial(net, out/prefix, workload, 2.0, [None,None])
+                 after = resource.getrusage(resource.RUSAGE_CHILDREN)
+                 value["peer_user_s"] = after.ru_utime - before.ru_utime
+                 value["peer_system_s"] = after.ru_stime - before.ru_stime
